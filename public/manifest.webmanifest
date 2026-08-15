@@ -1,0 +1,16 @@
+{
+  "name": "Jack — CV con asistente IA",
+  "short_name": "Jack",
+  "description": "Creá, mejorá y exportá tu CV con IA, y generá postulaciones personalizadas.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f2e2e",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}
