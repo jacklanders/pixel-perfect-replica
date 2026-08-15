@@ -1,0 +1,50 @@
+CHANGELOG — Plataforma de CV + Asistente IA "Jack"
+Repo: https://github.com/jacklanders/cv_ai_proyect
+
+Formato: cada versión documenta los cambios antes de avanzar a la siguiente.
+
+--------------------------------------------------------------------
+v1.0 — Fase 1 (maqueta, sin backend)
+--------------------------------------------------------------------
+- Sistema de diseño: paleta teal-ink / crema / ámbar, tipografías Space Grotesk
+  (títulos) y DM Sans (texto), definido en src/styles.css.
+- Componentes base: SiteHeader (público) y AppShell (área logueada con menú
+  lateral y contador de uso diario de IA).
+- Rutas creadas:
+  * /        landing con los 3 pasos (subir, mejorar, exportar).
+  * /login   pantalla partida con acceso Google y mail.
+  * /perfil  datos personales, resumen profesional, skills y firma de mail,
+             con barra de completitud.
+  * /cv      editor de CV con pestañas Editar / Vista previa y chat lateral
+             con Jack para sugerencias por sección.
+  * /mis-cv  versiones guardadas, duplicar, editar y exportar a PDF con
+             selector de plantilla (Clásica, Moderna, ATS puro).
+- Todo con datos simulados: sin login real, sin base de datos, sin API de IA.
+
+--------------------------------------------------------------------
+v2.0 — Fase 2 (maqueta): postulaciones y envío de mail
+--------------------------------------------------------------------
+- Nuevo módulo de datos simulados: src/lib/mock-postulaciones.ts (estado en
+  memoria, pensado para reemplazarse luego por la base de datos sin reescribir
+  las pantallas).
+- Rutas creadas:
+  * /postulaciones         historial de vacantes con estado Enviada /
+                           Descartada (con motivo) / Pendiente, filtros por
+                           estado y buscador.
+  * /postulaciones/nueva   carga del aviso por texto pegado o imagen
+                           (drag & drop), con extracción simulada de datos.
+  * /postulaciones/$id     generador de mail: selector de asunto (genérico de
+                           Jack vs. asunto obligatorio del aviso), campos
+                           origen fijo / destino / cuerpo / CCO con botón de
+                           copiar individual, adjunto de CV, firma editable y
+                           envío simulado.
+- Reglas de Jack reflejadas en la interfaz: alerta por requisito excluyente no
+  cumplido, preguntas cuando falta información, aviso de vacante vencida.
+- Límite freemium: 2 mails de postulación por día, con estado de límite
+  alcanzado (sin cobro real).
+- AppShell: nueva entrada "Postulaciones" en el menú y contador de mails del
+  día; enlace desde Mis CVs para usar una versión en una postulación.
+
+Pendiente para próximas versiones: login real con Google, base de datos y
+storage, API de Claude, envío por Gmail (OAuth), panel de administrador,
+búsqueda automática de avisos (Fase 3) y monetización (Fase 9).
