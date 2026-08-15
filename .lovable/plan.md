@@ -1,41 +1,75 @@
-# Revisión del "Hito 0" preparado en Claude
+# Hito 1 — Login con Google, perfil y CVs reales (Supabase externo)
 
-Revisé el patch (`0001-hito-0-fundacion.patch`) contra el repo real. El diagnóstico de Claude es correcto en lo estructural, pero hay errores que romperían la app en runtime y una recomendación de proceso que conviene invertir.
+Conectar la maqueta al proyecto Supabase Cloud propio: autenticación con Google, rutas
+protegidas, y `/perfil`, `/cv` y `/mis-cv` leyendo y escribiendo datos reales.
+`/postulaciones/*` sigue con datos simulados hasta el Hito 2.
 
-## Lo que Claude acertó
+## Estado verificado del repo
 
-- Es TanStack Start con SSR, `vite.config.ts` gestionado por `@lovable.dev/vite-tanstack-config` y build Nitro a Cloudflare Workers. No es Vite+React estático.
-- El gestor de paquetes es `bun` (`bun.lock`, `bunfig.toml`), no npm.
-- Hoy el repo es 100% maqueta con `src/lib/mock-postulaciones.ts`, sin backend ni tests.
-- El supuesto "Netlify + build estático" del prompt original no aplica.
+- Maqueta v1/v2 completa; el estado vive en `src/lib/mock-postulaciones.ts`.
+- Hito 0 cerrado: `CLAUDE.md`, `BACKLOG.md`, `CHANGELOG.txt`, CI, vitest + Playwright, `.env.example`.
+- `supabase/migrations/0001_init.sql` existe (377 líneas, con `user_roles`, `has_role()`,
+  `profiles`, `resumes`, `job_posts`, `applications`, `daily_usage`, `app_settings`, RLS y GRANTs).
+- No hay ningún cliente Supabase en el código todavía: no existen `src/integrations/`,
+  `src/lib/server/`, ni rutas protegidas. El login actual es puramente visual.
 
-## Errores del patch que hay que corregir antes de aplicarlo
+## Lo que hacés vos (fuera de Lovable)
 
-1. **Faltan los `GRANT` en las 7 tablas.** Ninguna tabla del `0001_init.sql` tiene grants. En este stack, RLS sola no alcanza: sin `GRANT SELECT, INSERT, UPDATE, DELETE ... TO authenticated` (y `GRANT ALL ... TO service_role`) toda consulta devuelve error de permisos. Este es el fallo más grave: la migración "pasa" pero la app no puede leer nada.
-2. **`oauth_connections` con policy de SELECT para el usuario.** Guarda refresh tokens de Gmail; con esa policy el token viaja al navegador. Debe ser tabla sin acceso desde el cliente (solo `service_role`), leída únicamente desde el servidor.
-3. **`app_settings` legible por cualquier autenticado, sin tabla de roles.** Para el panel de admin de la Fase 1 hace falta una tabla `user_roles` separada + función `has_role()` security definer. Nunca un campo `role` en `profiles`.
-4. **`increment_daily_usage`**: falta fijar `search_path` y revisar los `GRANT EXECUTE`; tal como está, una función security definer sin `set search_path = public` es un riesgo de escalación.
-5. **`.env.example` con `SUPABASE_SERVICE_ROLE_KEY` y claves de IA en archivo.** En este proyecto los secretos van al gestor de secretos de la plataforma y se leen dentro del handler del server function, nunca desde un `.env` commiteado ni con prefijo `VITE_`.
-6. **Edge Functions de Supabase para la IA/Gmail.** En este stack no se usan: la lógica de servidor va en `createServerFn` (`src/lib/*.functions.ts`) y los webhooks/callbacks OAuth en rutas `src/routes/api/public/*`.
-7. **`manifest.webmanifest` + `link` en `__root.tsx`**: está bien, pero faltan los íconos reales; sin ellos el manifest tira 404 en consola.
-8. **README/CI con npm**: el workflow ya usa bun, pero los scripts `typecheck`/`test`/`test:e2e` no existen todavía en `package.json`; hay que agregarlos junto con las dependencias, o el CI falla en el primer run.
-9. **Deploy**: el target real es Cloudflare Workers vía Nitro (o publicar desde Lovable). Cualquier referencia a Netlify hay que eliminarla del Hito 5.
+1. En Supabase Cloud: pegar `supabase/migrations/0001_init.sql` tal cual en el SQL Editor y ejecutarlo.
+2. En Google Cloud Console: crear las credenciales OAuth y habilitar el proveedor Google en
+   Supabase → Authentication → Providers, con la Redirect URL que da Supabase.
+3. En Supabase → Authentication → URL Configuration: agregar la URL de preview de Lovable y
+   la de producción como Redirect URLs permitidas.
+4. Pasarme `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` para cargarlas como variables del
+   proyecto (son claves públicas, ancladas por RLS). El `service_role` no entra en este hito.
 
-## Sobre el flujo de trabajo propuesto
+## Lo que hago yo
 
-La recomendación de "no dejar que Lovable conecte Supabase" está basada en un supuesto equivocado. Acá el backend se activa con Lovable Cloud y las migraciones se escriben a mano, con RLS `auth.uid() = user_id` y grants explícitos en el mismo archivo — es exactamente lo que el prompt exige, y además queda versionado en `supabase/migrations/`. El riesgo mayor es el inverso: aplicar por patch un esquema creado contra otro proyecto Supabase y que quede desalineado con el que usa la app.
+### 1. Cliente y sesión
+- `src/lib/supabase/client.ts`: cliente de navegador tipado, con sesión persistida.
+- `src/lib/supabase/types.ts`: tipos de la base escritos a mano a partir de `0001_init.sql`
+  (con Supabase externo no hay generación automática de tipos desde Lovable).
+- `src/lib/supabase/auth-middleware.ts` + `src/lib/auth.server.ts`: validación del bearer token
+  en servidor, para que las `createServerFn` de este hito y los siguientes corran con RLS
+  como el usuario. Bearer adjuntado automáticamente vía `functionMiddleware` en `src/start.ts`.
+- `src/hooks/useAuth.ts`: sesión, usuario y `signOut` para la UI.
 
-Flujo sugerido:
+### 2. Rutas protegidas
+- Nuevo layout `src/routes/_authenticated/route.tsx` (`ssr: false`) que redirige a `/login`
+  sin sesión.
+- Mover bajo ese layout: `perfil`, `cv`, `mis-cv` y `postulaciones*`.
+  `/` y `/login` quedan públicas.
+- `/login`: botón de Google real (`signInWithOAuth`) + redirect de vuelta a la ruta pedida.
+  Si ya hay sesión, redirige a `/perfil`.
+- `AppShell`: menú de usuario con nombre/avatar y cierre de sesión (hoy es estático).
 
-- Backend (esquema, RLS, auth, server functions) se hace acá, versionado en el repo.
-- Claude sigue siendo útil para revisión de seguridad del SQL, definición de hitos y tests.
-- Evitar patches que toquen `vite.config.ts`, `src/routeTree.gen.ts` o `package.json` de dependencias base.
+### 3. Perfil real
+- Server fns en `src/lib/perfil.functions.ts`: `getMiPerfil` y `guardarPerfil` contra `profiles`
+  (nombre, email, teléfono, ubicación, rubro objetivo, firma de mail, preferencias).
+- Alta automática de la fila de `profiles` en el primer login, tomando nombre y mail de Google.
+- `/perfil` deja de usar estado local: carga con TanStack Query, guarda con mutación,
+  barra de completitud calculada sobre los datos reales.
 
-## Qué propongo hacer ahora
+### 4. CVs reales
+- Server fns en `src/lib/cv.functions.ts`: listar, obtener, crear, actualizar, duplicar y borrar
+  sobre `resumes` (contenido en `jsonb`, igual que la estructura que ya usa el editor).
+- `/mis-cv`: lista real, duplicar y borrar persistidos; el modal de exportar sigue como está.
+- `/cv`: carga y guarda la versión seleccionada; el chat con Jack sigue simulado (la IA es Hito 3).
 
-1. Aplicar del Hito 0 solo lo que no depende del backend: `CLAUDE.md`, `BACKLOG.md`, README corregido (bun + Cloudflare), `manifest.webmanifest` con íconos, `src/lib/observability.ts`.
-2. Reescribir `0001_init.sql` con las 7 tablas + `user_roles`, cada `CREATE TABLE` seguido de sus `GRANT`, RLS y policies; `oauth_connections` sin acceso de cliente; `increment_daily_usage` con `search_path` fijo.
-3. Agregar CI y tests (`vitest` + `playwright`) con los scripts que faltan en `package.json`.
-4. Recién después, activar el backend y conectar auth real, dejando la maqueta funcionando mientras tanto.
+### 5. Cierre del hito
+- Tests: unit de los helpers de perfil/CV, y e2e de login (con sesión mockeada) y de guardar perfil.
+- Correr `lint`, `typecheck`, `test` y `build`.
+- Actualizar `CHANGELOG.txt` (v3.0) y tildar en `BACKLOG.md` lo que corresponda.
 
-Decime si querés que arranque por el punto 1+3 (todo lo que no toca backend) o directamente por la migración corregida.
+## Notas técnicas
+
+- Al ser Supabase externo y no Lovable Cloud, no hay `src/integrations/supabase/*` autogenerado
+  ni broker de OAuth de Lovable: el login usa `supabase.auth.signInWithOAuth('google')` directo
+  contra tu proyecto, y los tipos de la base se mantienen a mano en el repo.
+- No se toca `supabase/migrations/0001_init.sql`. Si al conectar aparece una diferencia entre el
+  esquema y lo que espera la maqueta, la resuelvo con una migración nueva `0002_*.sql`, nunca
+  editando la primera.
+- Nada de `service_role` ni claves de IA en este hito; el código server-only queda preparado
+  en `src/lib/*.server.ts` para los Hitos 3 y 4.
+- El acceso a datos siempre pasa por `createServerFn` con el middleware de auth, así RLS
+  (`auth.uid() = user_id`) es el límite real, no el guard de ruta.
