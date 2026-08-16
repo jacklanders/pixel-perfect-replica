@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Copy, Download, FileText, Plus, Clock, Check } from "lucide-react";
 
-export const Route = createFileRoute("/mis-cv")({
+export const Route = createFileRoute("/_authenticated/mis-cv")({
   component: MisCv,
   head: () => ({
     meta: [

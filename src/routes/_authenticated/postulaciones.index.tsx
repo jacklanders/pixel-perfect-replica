@@ -13,7 +13,7 @@ import {
   type EstadoPostulacion,
 } from "@/lib/mock-postulaciones";
 
-export const Route = createFileRoute("/postulaciones/")({
+export const Route = createFileRoute("/_authenticated/postulaciones/")({
   head: () => ({
     meta: [
       { title: "Postulaciones — Jack" },
