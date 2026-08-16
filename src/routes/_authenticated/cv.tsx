@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export const Route = createFileRoute("/cv")({
+export const Route = createFileRoute("/_authenticated/cv")({
   head: () => ({
     meta: [
       { title: "Mi CV — Jack" },

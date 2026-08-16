@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ImageUp, Sparkles, Wand2, AlertTriangle } from "lucide-react";
 import { crearPostulacion } from "@/lib/mock-postulaciones";
 
-export const Route = createFileRoute("/postulaciones/nueva")({
+export const Route = createFileRoute("/_authenticated/postulaciones/nueva")({
   head: () => ({
     meta: [
       { title: "Cargar aviso — Jack" },

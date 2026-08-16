@@ -1,11 +1,20 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { z } from "zod";
 import { JackMark } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+
+const searchSchema = z.object({
+  redirect: z.string().optional(),
+});
 
 export const Route = createFileRoute("/login")({
+  validateSearch: searchSchema,
   head: () => ({
     meta: [
       { title: "Ingresar a Jack" },
@@ -23,7 +32,58 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
+function destinoSeguro(redirectParam?: string): string {
+  if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")) {
+    return redirectParam;
+  }
+  return "/perfil";
+}
+
 function LoginPage() {
+  const { redirect } = Route.useSearch();
+  const navigate = useNavigate();
+  const { session, cargando } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    if (!cargando && session) {
+      navigate({ to: destinoSeguro(redirect), replace: true });
+    }
+  }, [cargando, session, redirect, navigate]);
+
+  const entrarConGoogle = async () => {
+    setError(null);
+    if (!isSupabaseConfigured) {
+      setError("Falta configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.");
+      return;
+    }
+    const destino = destinoSeguro(redirect);
+    const { error: err } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}${destino}`,
+      },
+    });
+    if (err) setError(err.message);
+  };
+
+  const entrarConEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!isSupabaseConfigured) {
+      setError("Falta configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.");
+      return;
+    }
+    setEnviando(true);
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+    setEnviando(false);
+    if (err) setError(err.message);
+    else navigate({ to: destinoSeguro(redirect), replace: true });
+  };
+
   return (
     <div className="grid min-h-screen md:grid-cols-2">
       <div className="surface-hero relative hidden flex-col justify-between p-10 md:flex">
@@ -49,8 +109,14 @@ function LoginPage() {
             Usá tu cuenta de Google: es la casilla desde la que después enviás postulaciones.
           </p>
 
-          <Button variant="outline" className="mt-7 w-full" size="lg" asChild>
-            <Link to="/perfil">Continuar con Google</Link>
+          <Button
+            variant="outline"
+            className="mt-7 w-full"
+            size="lg"
+            onClick={entrarConGoogle}
+            type="button"
+          >
+            Continuar con Google
           </Button>
 
           <div className="my-6 flex items-center gap-3">
@@ -59,28 +125,45 @@ function LoginPage() {
             <Separator className="flex-1" />
           </div>
 
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-            }}
-          >
+          <form className="space-y-4" onSubmit={entrarConEmail}>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="vos@email.com" autoComplete="email" />
+              <Input
+                id="email"
+                type="email"
+                placeholder="vos@email.com"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>
-              <Input id="password" type="password" autoComplete="current-password" />
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
             </div>
-            <Button asChild className="w-full" size="lg">
-              <Link to="/perfil">Entrar</Link>
+            <Button className="w-full" size="lg" type="submit" disabled={enviando}>
+              {enviando ? "Entrando…" : "Entrar"}
             </Button>
           </form>
 
-          <p className="mt-6 text-xs text-muted-foreground">
-            Prototipo de interfaz: todavía no hay cuentas reales.
-          </p>
+          {error ? (
+            <p role="alert" className="mt-4 text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+
+          {!isSupabaseConfigured ? (
+            <p className="mt-6 text-xs text-muted-foreground">
+              Supabase todavía no está configurado en este entorno: cargá VITE_SUPABASE_URL y
+              VITE_SUPABASE_ANON_KEY para habilitar el login real.
+            </p>
+          ) : null}
         </div>
       </div>
     </div>

@@ -27,7 +27,7 @@ import {
   usuario,
 } from "@/lib/mock-postulaciones";
 
-export const Route = createFileRoute("/postulaciones/$id")({
+export const Route = createFileRoute("/_authenticated/postulaciones/$id")({
   head: () => ({
     meta: [
       { title: "Mail de postulación — Jack" },

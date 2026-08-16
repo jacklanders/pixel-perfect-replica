@@ -10,23 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as CvRouteImport } from './routes/cv'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as MisCvRouteImport } from './routes/mis-cv'
-import { Route as PerfilRouteImport } from './routes/perfil'
-import { Route as PostulacionesRouteImport } from './routes/postulaciones'
-import { Route as PostulacionesIndexRouteImport } from './routes/postulaciones.index'
-import { Route as PostulacionesIdRouteImport } from './routes/postulaciones.$id'
-import { Route as PostulacionesNuevaRouteImport } from './routes/postulaciones.nueva'
+import { Route as AuthenticatedCvRouteImport } from './routes/_authenticated/cv'
+import { Route as AuthenticatedMisCvRouteImport } from './routes/_authenticated/mis-cv'
+import { Route as AuthenticatedPerfilRouteImport } from './routes/_authenticated/perfil'
+import { Route as AuthenticatedPostulacionesRouteImport } from './routes/_authenticated/postulaciones'
+import { Route as AuthenticatedPostulacionesIndexRouteImport } from './routes/_authenticated/postulaciones.index'
+import { Route as AuthenticatedPostulacionesIdRouteImport } from './routes/_authenticated/postulaciones.$id'
+import { Route as AuthenticatedPostulacionesNuevaRouteImport } from './routes/_authenticated/postulaciones.nueva'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CvRoute = CvRouteImport.update({
-  id: '/cv',
-  path: '/cv',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -34,76 +29,85 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MisCvRoute = MisCvRouteImport.update({
-  id: '/mis-cv',
+const AuthenticatedCvRoute = AuthenticatedCvRouteImport.update({
+  id: '/_authenticated/cv',
+  path: '/cv',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedMisCvRoute = AuthenticatedMisCvRouteImport.update({
+  id: '/_authenticated/mis-cv',
   path: '/mis-cv',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PerfilRoute = PerfilRouteImport.update({
-  id: '/perfil',
+const AuthenticatedPerfilRoute = AuthenticatedPerfilRouteImport.update({
+  id: '/_authenticated/perfil',
   path: '/perfil',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PostulacionesRoute = PostulacionesRouteImport.update({
-  id: '/postulaciones',
-  path: '/postulaciones',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PostulacionesIndexRoute = PostulacionesIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => PostulacionesRoute,
-} as any)
-const PostulacionesIdRoute = PostulacionesIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => PostulacionesRoute,
-} as any)
-const PostulacionesNuevaRoute = PostulacionesNuevaRouteImport.update({
-  id: '/nueva',
-  path: '/nueva',
-  getParentRoute: () => PostulacionesRoute,
-} as any)
+const AuthenticatedPostulacionesRoute =
+  AuthenticatedPostulacionesRouteImport.update({
+    id: '/_authenticated/postulaciones',
+    path: '/postulaciones',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AuthenticatedPostulacionesIndexRoute =
+  AuthenticatedPostulacionesIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedPostulacionesRoute,
+  } as any)
+const AuthenticatedPostulacionesIdRoute =
+  AuthenticatedPostulacionesIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedPostulacionesRoute,
+  } as any)
+const AuthenticatedPostulacionesNuevaRoute =
+  AuthenticatedPostulacionesNuevaRouteImport.update({
+    id: '/nueva',
+    path: '/nueva',
+    getParentRoute: () => AuthenticatedPostulacionesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/cv': typeof CvRoute
   '/login': typeof LoginRoute
-  '/mis-cv': typeof MisCvRoute
-  '/perfil': typeof PerfilRoute
-  '/postulaciones': typeof PostulacionesRouteWithChildren
-  '/postulaciones/$id': typeof PostulacionesIdRoute
-  '/postulaciones/nueva': typeof PostulacionesNuevaRoute
-  '/postulaciones/': typeof PostulacionesIndexRoute
+  '/cv': typeof AuthenticatedCvRoute
+  '/mis-cv': typeof AuthenticatedMisCvRoute
+  '/perfil': typeof AuthenticatedPerfilRoute
+  '/postulaciones': typeof AuthenticatedPostulacionesRouteWithChildren
+  '/postulaciones/$id': typeof AuthenticatedPostulacionesIdRoute
+  '/postulaciones/nueva': typeof AuthenticatedPostulacionesNuevaRoute
+  '/postulaciones/': typeof AuthenticatedPostulacionesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/cv': typeof CvRoute
   '/login': typeof LoginRoute
-  '/mis-cv': typeof MisCvRoute
-  '/perfil': typeof PerfilRoute
-  '/postulaciones/$id': typeof PostulacionesIdRoute
-  '/postulaciones/nueva': typeof PostulacionesNuevaRoute
-  '/postulaciones': typeof PostulacionesIndexRoute
+  '/cv': typeof AuthenticatedCvRoute
+  '/mis-cv': typeof AuthenticatedMisCvRoute
+  '/perfil': typeof AuthenticatedPerfilRoute
+  '/postulaciones/$id': typeof AuthenticatedPostulacionesIdRoute
+  '/postulaciones/nueva': typeof AuthenticatedPostulacionesNuevaRoute
+  '/postulaciones': typeof AuthenticatedPostulacionesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/cv': typeof CvRoute
   '/login': typeof LoginRoute
-  '/mis-cv': typeof MisCvRoute
-  '/perfil': typeof PerfilRoute
-  '/postulaciones': typeof PostulacionesRouteWithChildren
-  '/postulaciones/$id': typeof PostulacionesIdRoute
-  '/postulaciones/nueva': typeof PostulacionesNuevaRoute
-  '/postulaciones/': typeof PostulacionesIndexRoute
+  '/_authenticated/cv': typeof AuthenticatedCvRoute
+  '/_authenticated/mis-cv': typeof AuthenticatedMisCvRoute
+  '/_authenticated/perfil': typeof AuthenticatedPerfilRoute
+  '/_authenticated/postulaciones': typeof AuthenticatedPostulacionesRouteWithChildren
+  '/_authenticated/postulaciones/$id': typeof AuthenticatedPostulacionesIdRoute
+  '/_authenticated/postulaciones/nueva': typeof AuthenticatedPostulacionesNuevaRoute
+  '/_authenticated/postulaciones/': typeof AuthenticatedPostulacionesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/cv'
     | '/login'
+    | '/cv'
     | '/mis-cv'
     | '/perfil'
     | '/postulaciones'
@@ -113,8 +117,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/cv'
     | '/login'
+    | '/cv'
     | '/mis-cv'
     | '/perfil'
     | '/postulaciones/$id'
@@ -123,23 +127,23 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/cv'
     | '/login'
-    | '/mis-cv'
-    | '/perfil'
-    | '/postulaciones'
-    | '/postulaciones/$id'
-    | '/postulaciones/nueva'
-    | '/postulaciones/'
+    | '/_authenticated/cv'
+    | '/_authenticated/mis-cv'
+    | '/_authenticated/perfil'
+    | '/_authenticated/postulaciones'
+    | '/_authenticated/postulaciones/$id'
+    | '/_authenticated/postulaciones/nueva'
+    | '/_authenticated/postulaciones/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  CvRoute: typeof CvRoute
   LoginRoute: typeof LoginRoute
-  MisCvRoute: typeof MisCvRoute
-  PerfilRoute: typeof PerfilRoute
-  PostulacionesRoute: typeof PostulacionesRouteWithChildren
+  AuthenticatedCvRoute: typeof AuthenticatedCvRoute
+  AuthenticatedMisCvRoute: typeof AuthenticatedMisCvRoute
+  AuthenticatedPerfilRoute: typeof AuthenticatedPerfilRoute
+  AuthenticatedPostulacionesRoute: typeof AuthenticatedPostulacionesRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -151,13 +155,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/cv': {
-      id: '/cv'
-      path: '/cv'
-      fullPath: '/cv'
-      preLoaderRoute: typeof CvRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -165,74 +162,83 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/mis-cv': {
-      id: '/mis-cv'
+    '/_authenticated/cv': {
+      id: '/_authenticated/cv'
+      path: '/cv'
+      fullPath: '/cv'
+      preLoaderRoute: typeof AuthenticatedCvRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/mis-cv': {
+      id: '/_authenticated/mis-cv'
       path: '/mis-cv'
       fullPath: '/mis-cv'
-      preLoaderRoute: typeof MisCvRouteImport
+      preLoaderRoute: typeof AuthenticatedMisCvRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/perfil': {
-      id: '/perfil'
+    '/_authenticated/perfil': {
+      id: '/_authenticated/perfil'
       path: '/perfil'
       fullPath: '/perfil'
-      preLoaderRoute: typeof PerfilRouteImport
+      preLoaderRoute: typeof AuthenticatedPerfilRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/postulaciones': {
-      id: '/postulaciones'
+    '/_authenticated/postulaciones': {
+      id: '/_authenticated/postulaciones'
       path: '/postulaciones'
       fullPath: '/postulaciones'
-      preLoaderRoute: typeof PostulacionesRouteImport
+      preLoaderRoute: typeof AuthenticatedPostulacionesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/postulaciones/': {
-      id: '/postulaciones/'
+    '/_authenticated/postulaciones/': {
+      id: '/_authenticated/postulaciones/'
       path: '/'
       fullPath: '/postulaciones/'
-      preLoaderRoute: typeof PostulacionesIndexRouteImport
-      parentRoute: typeof PostulacionesRoute
+      preLoaderRoute: typeof AuthenticatedPostulacionesIndexRouteImport
+      parentRoute: typeof AuthenticatedPostulacionesRoute
     }
-    '/postulaciones/$id': {
-      id: '/postulaciones/$id'
+    '/_authenticated/postulaciones/$id': {
+      id: '/_authenticated/postulaciones/$id'
       path: '/$id'
       fullPath: '/postulaciones/$id'
-      preLoaderRoute: typeof PostulacionesIdRouteImport
-      parentRoute: typeof PostulacionesRoute
+      preLoaderRoute: typeof AuthenticatedPostulacionesIdRouteImport
+      parentRoute: typeof AuthenticatedPostulacionesRoute
     }
-    '/postulaciones/nueva': {
-      id: '/postulaciones/nueva'
+    '/_authenticated/postulaciones/nueva': {
+      id: '/_authenticated/postulaciones/nueva'
       path: '/nueva'
       fullPath: '/postulaciones/nueva'
-      preLoaderRoute: typeof PostulacionesNuevaRouteImport
-      parentRoute: typeof PostulacionesRoute
+      preLoaderRoute: typeof AuthenticatedPostulacionesNuevaRouteImport
+      parentRoute: typeof AuthenticatedPostulacionesRoute
     }
   }
 }
 
-interface PostulacionesRouteChildren {
-  PostulacionesIdRoute: typeof PostulacionesIdRoute
-  PostulacionesNuevaRoute: typeof PostulacionesNuevaRoute
-  PostulacionesIndexRoute: typeof PostulacionesIndexRoute
+interface AuthenticatedPostulacionesRouteChildren {
+  AuthenticatedPostulacionesIdRoute: typeof AuthenticatedPostulacionesIdRoute
+  AuthenticatedPostulacionesNuevaRoute: typeof AuthenticatedPostulacionesNuevaRoute
+  AuthenticatedPostulacionesIndexRoute: typeof AuthenticatedPostulacionesIndexRoute
 }
 
-const PostulacionesRouteChildren: PostulacionesRouteChildren = {
-  PostulacionesIdRoute: PostulacionesIdRoute,
-  PostulacionesNuevaRoute: PostulacionesNuevaRoute,
-  PostulacionesIndexRoute: PostulacionesIndexRoute,
-}
+const AuthenticatedPostulacionesRouteChildren: AuthenticatedPostulacionesRouteChildren =
+  {
+    AuthenticatedPostulacionesIdRoute: AuthenticatedPostulacionesIdRoute,
+    AuthenticatedPostulacionesNuevaRoute: AuthenticatedPostulacionesNuevaRoute,
+    AuthenticatedPostulacionesIndexRoute: AuthenticatedPostulacionesIndexRoute,
+  }
 
-const PostulacionesRouteWithChildren = PostulacionesRoute._addFileChildren(
-  PostulacionesRouteChildren,
-)
+const AuthenticatedPostulacionesRouteWithChildren =
+  AuthenticatedPostulacionesRoute._addFileChildren(
+    AuthenticatedPostulacionesRouteChildren,
+  )
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  CvRoute: CvRoute,
   LoginRoute: LoginRoute,
-  MisCvRoute: MisCvRoute,
-  PerfilRoute: PerfilRoute,
-  PostulacionesRoute: PostulacionesRouteWithChildren,
+  AuthenticatedCvRoute: AuthenticatedCvRoute,
+  AuthenticatedMisCvRoute: AuthenticatedMisCvRoute,
+  AuthenticatedPerfilRoute: AuthenticatedPerfilRoute,
+  AuthenticatedPostulacionesRoute: AuthenticatedPostulacionesRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
