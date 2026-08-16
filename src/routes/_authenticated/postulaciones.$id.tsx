@@ -99,12 +99,7 @@ function CampoCopiable({
           onChange={(e) => onChange?.(e.target.value)}
         />
       ) : (
-        <Input
-          id={id}
-          value={value}
-          readOnly={fijo}
-          onChange={(e) => onChange?.(e.target.value)}
-        />
+        <Input id={id} value={value} readOnly={fijo} onChange={(e) => onChange?.(e.target.value)} />
       )}
     </div>
   );

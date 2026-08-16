@@ -11,8 +11,6 @@ const nav = [
   { to: "/postulaciones", label: "Postulaciones", icon: Briefcase },
 ] as const;
 
-
-
 export function AppShell({
   title,
   subtitle,
@@ -25,7 +23,6 @@ export function AppShell({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   usePostulaciones();
   const enviados = mailsEnviadosHoy();
-
 
   return (
     <div className="min-h-screen bg-background">
@@ -68,15 +65,11 @@ export function AppShell({
           </div>
         </aside>
 
-
-
         <main className="min-w-0 flex-1">
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h1 className="font-display text-2xl font-bold md:text-3xl">{title}</h1>
-              {subtitle ? (
-                <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-              ) : null}
+              {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
             </div>
             <nav className="flex gap-2 md:hidden">
               {nav.map((item) => (

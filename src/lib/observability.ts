@@ -33,7 +33,10 @@ export function reportTechnicalError(error: unknown, context?: Record<string, st
   // TODO(Hito 5): Sentry.captureException(error, { extra: context })
 }
 
-export function trackEvent(name: string, properties?: Record<string, string | number | boolean>): void {
+export function trackEvent(
+  name: string,
+  properties?: Record<string, string | number | boolean>,
+): void {
   if (!posthogKey) return;
   // TODO(Hito 5): posthog.capture(name, properties)
   console.info("[observability] event", name, properties);

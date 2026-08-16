@@ -93,15 +93,9 @@ function NuevaPostulacion() {
             }`}
           >
             <ImageUp className="size-6 text-muted-foreground" />
-            <p className="text-sm font-medium">
-              {imagen ?? "Arrastrá una captura del aviso acá"}
-            </p>
+            <p className="text-sm font-medium">{imagen ?? "Arrastrá una captura del aviso acá"}</p>
             <p className="text-xs text-muted-foreground">PNG, JPG o PDF · Jack lee la imagen</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setImagen("captura-aviso.png")}
-            >
+            <Button variant="outline" size="sm" onClick={() => setImagen("captura-aviso.png")}>
               Seleccionar archivo
             </Button>
           </div>
@@ -173,8 +167,8 @@ function NuevaPostulacion() {
                   Jack necesita una confirmación
                 </p>
                 <p className="mt-1.5 text-sm text-muted-foreground">
-                  El aviso pide vehículo propio. ¿Contás con uno? No lo asumo: según lo que me
-                  digas redacto el mail con honestidad y en positivo.
+                  El aviso pide vehículo propio. ¿Contás con uno? No lo asumo: según lo que me digas
+                  redacto el mail con honestidad y en positivo.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button size="sm" variant="outline">

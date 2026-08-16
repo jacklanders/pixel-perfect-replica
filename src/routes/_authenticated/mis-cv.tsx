@@ -114,7 +114,6 @@ function MisCv() {
               </Button>
               <ExportDialog template={template} setTemplate={setTemplate} />
             </div>
-
           </article>
         ))}
       </div>
@@ -150,9 +149,7 @@ function ExportDialog({
               type="button"
               onClick={() => setTemplate(t.id)}
               className={`flex items-center justify-between rounded-lg border p-3 text-left transition-colors ${
-                template === t.id
-                  ? "border-primary bg-secondary"
-                  : "border-border hover:bg-muted"
+                template === t.id ? "border-primary bg-secondary" : "border-border hover:bg-muted"
               }`}
             >
               <span>

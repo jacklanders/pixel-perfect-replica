@@ -80,7 +80,9 @@ export function normalizarContenidoCv(value: Json | null | undefined): CvConteni
     titular: typeof raw["titular"] === "string" ? raw["titular"] : "",
     perfil: typeof raw["perfil"] === "string" ? raw["perfil"] : "",
     experiencia: experiencia
-      .filter((e): e is { [key: string]: Json } => !!e && typeof e === "object" && !Array.isArray(e))
+      .filter(
+        (e): e is { [key: string]: Json } => !!e && typeof e === "object" && !Array.isArray(e),
+      )
       .map((e, i) => ({
         id: typeof e["id"] === "string" ? e["id"] : `exp-${i}`,
         puesto: typeof e["puesto"] === "string" ? e["puesto"] : "",

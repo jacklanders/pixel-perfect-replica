@@ -59,8 +59,8 @@ function Landing() {
               con criterio.
             </h1>
             <p className="mt-5 max-w-md text-base/relaxed opacity-85">
-              Jack es tu asistente de búsqueda laboral: mejora lo que ya escribiste, completa lo
-              que falta y deja tu CV listo para postular.
+              Jack es tu asistente de búsqueda laboral: mejora lo que ya escribiste, completa lo que
+              falta y deja tu CV listo para postular.
             </p>
             <div className="mt-8">
               <Button asChild size="lg" variant="secondary">
