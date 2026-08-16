@@ -61,5 +61,3 @@ export const guardarPerfil = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return filaAPerfil(guardado);
   });
-
-export const _schemas = { perfilSchema, z };
