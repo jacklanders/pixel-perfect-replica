@@ -30,9 +30,11 @@ datos y documentación, dejando puntos de conexión explícitos para cuando el p
 - Estados de carga, error y vacío en las tres pantallas (skeletons + reintento),
   para que una falla de red no deje la pantalla en blanco.
 
-Las pantallas llaman **solo** a las server fns de `src/lib/*.functions.ts`. Si el patch de
-Claude renombra esas funciones a `src/lib/server/profile.ts`, el cambio es de una línea de
-import por pantalla: la UI no depende del mecanismo de sesión.
+Las pantallas llaman **solo** a las server fns de `src/lib/*.functions.ts` actuales. Si el patch de
+Claude renombra esas funciones o las mueve a `src/lib/server/profile.ts`, el cambio es de una
+línea de import por pantalla; pero no se borran ni se convierten los archivos actuales hasta
+revisar el patch y decidir explícitamente la estrategia de integración. La UI no depende del
+mecanismo de sesión.
 
 ### 2. Menú de usuario en `AppShell`
 
