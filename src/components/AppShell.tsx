@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { FileText, User, Sparkles, Briefcase } from "lucide-react";
 import { JackMark } from "@/components/SiteHeader";
+import { UserMenu } from "@/components/UserMenu";
 import { LIMITE_DIARIO, mailsEnviadosHoy, usePostulaciones } from "@/lib/mock-postulaciones";
 
 const nav = [
