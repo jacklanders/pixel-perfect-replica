@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { FileText, User, Sparkles, Briefcase } from "lucide-react";
 import { JackMark } from "@/components/SiteHeader";
+import { UserMenu } from "@/components/UserMenu";
 import { LIMITE_DIARIO, mailsEnviadosHoy, usePostulaciones } from "@/lib/mock-postulaciones";
 
 const nav = [
@@ -71,17 +72,20 @@ export function AppShell({
               <h1 className="font-display text-2xl font-bold md:text-3xl">{title}</h1>
               {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
             </div>
-            <nav className="flex gap-2 md:hidden">
-              {nav.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className="rounded-lg border border-border px-3 py-1.5 text-xs"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
+            <div className="flex items-center gap-2">
+              <UserMenu />
+              <nav className="flex gap-2 md:hidden">
+                {nav.map((item) => (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </nav>
+            </div>
           </div>
           {children}
         </main>
