@@ -4,6 +4,35 @@ import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
 import { filaACv, guardarCvSchema, type Cv } from "@/lib/cv.model";
 import type { ResumeRow } from "@/lib/supabase/types";
 
+export const getCvById = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }): Promise<Cv> => {
+    const { data: fila, error } = await context.supabase
+      .from("resumes")
+      .select("*")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .single();
+
+    if (error) throw new Error(error.message);
+    return filaACv(fila as ResumeRow);
+  });
+
+export const getCvPrimario = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<Cv | null> => {
+    const { data, error } = await context.supabase
+      .from("resumes")
+      .select("*")
+      .eq("user_id", context.userId)
+      .eq("is_primary", true)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    return data ? filaACv(data as ResumeRow) : null;
+  });
+
 export const listarCvs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<Cv[]> => {
