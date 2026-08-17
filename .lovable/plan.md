@@ -50,6 +50,9 @@ mecanismo de sesión.
 - E2E (Playwright) con las server fns y la sesión mockeadas: `/perfil` muestra los datos
   cargados y el guardado dispara la mutación; sin sesión, una ruta protegida redirige a
   `/login`. Sin credenciales reales ni servicios externos.
+- **Aclaración**: los E2E mockeados validan la UI y los contratos de integración, **no**
+  certifican el login real, la persistencia de sesión ni el comportamiento de RLS. Esas pruebas
+  quedan pendientes después de integrar Claude y cargar las variables de Supabase.
 
 ### 4. Documentación y cierre
 
