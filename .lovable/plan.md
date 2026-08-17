@@ -73,7 +73,13 @@ mecanismo de sesión.
 ## Notas técnicas
 
 - Al integrar el patch va a haber solapamiento en `src/lib/supabase/client.ts`,
-  `src/routes/login.tsx` y `src/routes/_authenticated/route.tsx`: en esos archivos gana la
-  versión de Claude. Las pantallas y los modelos de datos que toco acá no se solapan.
-- Si el patch mueve las server fns a `src/lib/server/*`, los `*.functions.ts` actuales pasan
-  a ser wrappers finos o se borran; lo resuelvo en el merge, no antes.
+  `src/routes/login.tsx` y `src/routes/_authenticated/route.tsx`. Si durante el trabajo aparece
+  un conflicto con archivos modificados por el patch de Claude, **detenerse y no resolverlo
+  automáticamente**: no se sobrescribe la implementación de Claude. Se informa el conflicto para
+  resolverlo después de integrar el patch.
+- Si el patch mueve las server fns a `src/lib/server/*`, los `*.functions.ts` actuales no se
+  borran ni se convierten en wrappers finos hasta revisar el patch y decidir explícitamente la
+  estrategia de integración.
+- Los E2E mockeados validan la UI y los contratos de integración, **no** certifican el login real,
+  la persistencia de sesión ni el comportamiento de RLS. Esas pruebas quedan pendientes
+  después de integrar Claude y cargar las variables de Supabase.
