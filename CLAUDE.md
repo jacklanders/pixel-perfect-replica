@@ -70,7 +70,7 @@ Playwright con mocks de IA/Gmail — sin depender de servicios externos reales e
 - Ninguna verificación de rol admin vive solo en frontend — siempre repetida server-side (RLS y/o
   `createServerFn` que llama `has_role()` antes de escribir).
 - Toda función `security definer` lleva `set search_path = public` y un `REVOKE EXECUTE ... FROM
-  PUBLIC` explícito antes de otorgar `EXECUTE` solo a los roles que la necesitan — Postgres deja
+PUBLIC` explícito antes de otorgar `EXECUTE` solo a los roles que la necesitan — Postgres deja
   `EXECUTE` abierto a `PUBLIC` (incluido `anon`) por default si no se revoca.
 - Datos sensibles que nunca deben ser legibles por el cliente (ej. `oauth_connections.encrypted_refresh_token`)
   van en una tabla con RLS habilitado y **sin ninguna policy ni GRANT** para `anon`/`authenticated` — solo
@@ -104,6 +104,7 @@ Functions, OAuth):
 
 Ver criterios completos en el prompt de producto. Resumen operativo: el hito no está terminado si falta
 alguno de estos puntos:
+
 - Ruta usable de punta a punta (no capas sueltas de frontend/backend).
 - Lint + typecheck + tests afectados + build en verde.
 - RLS verificado para toda tabla nueva.

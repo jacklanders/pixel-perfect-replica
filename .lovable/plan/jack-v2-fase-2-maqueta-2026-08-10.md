@@ -16,9 +16,11 @@ Si querés un punto de restauración visual, también podés marcarlo desde el h
 Todo Fase 2 está sin construir. En esta versión se hace solo la interfaz, con datos de ejemplo y envío simulado.
 
 ### 1. Nueva sección "Postulaciones" (`/postulaciones`)
+
 Listado/historial de vacantes trabajadas con estado: **Enviada**, **Descartada** (con motivo) o **Pendiente** (falta confirmación del usuario). Filtros por estado, buscador, y acceso al detalle de cada una.
 
 ### 2. Cargar aviso (`/postulaciones/nueva`)
+
 - Pegar el texto del aviso o subir una imagen/captura (drag & drop, parseo simulado).
 - Panel de "datos extraídos por Jack": puesto, empresa, ubicación, mail de contacto, requisitos excluyentes, fecha de vigencia.
 - Avisos de Jack según las reglas del prompt:
@@ -27,15 +29,17 @@ Listado/historial de vacantes trabajadas con estado: **Enviada**, **Descartada**
   - Aviso de aviso vencido, con opción de generar igual.
 
 ### 3. Generador de mail (`/postulaciones/$id`)
+
 - Selector de **asunto**: botón "genérico de Jack" y, si el aviso pide uno exacto, ambos visibles para elegir.
 - Campos: origen (fijo, el mail de registro), destino, cuerpo generado, CCO automático al propio mail.
 - Botón de copiar en cada campo.
 - Adjuntar CV: elegir una de las versiones guardadas en "Mis CVs" o subir PDF/Word.
 - Firma de mail tomada del Perfil, editable.
-- Botón "Enviar" simulado: muestra confirmación y pasa la postulación a estado *Enviada*.
+- Botón "Enviar" simulado: muestra confirmación y pasa la postulación a estado _Enviada_.
 - Contador freemium: 2 mails por día, con estado de límite alcanzado (sin cobro real).
 
 ### 4. Ajustes en lo ya hecho
+
 - Sumar "Postulaciones" al menú lateral del AppShell.
 - Enlazar el contador de uso diario del sidebar con el límite de postulaciones.
 - Enlace desde "Mis CVs" para usar una versión en una postulación.

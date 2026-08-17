@@ -26,6 +26,7 @@ protegidas, y `/perfil`, `/cv` y `/mis-cv` leyendo y escribiendo datos reales.
 ## Lo que hago yo
 
 ### 1. Cliente y sesión
+
 - `src/lib/supabase/client.ts`: cliente de navegador tipado, con sesión persistida.
 - `src/lib/supabase/types.ts`: tipos de la base escritos a mano a partir de `0001_init.sql`
   (con Supabase externo no hay generación automática de tipos desde Lovable).
@@ -35,6 +36,7 @@ protegidas, y `/perfil`, `/cv` y `/mis-cv` leyendo y escribiendo datos reales.
 - `src/hooks/useAuth.ts`: sesión, usuario y `signOut` para la UI.
 
 ### 2. Rutas protegidas
+
 - Nuevo layout `src/routes/_authenticated/route.tsx` (`ssr: false`) que redirige a `/login`
   sin sesión.
 - Mover bajo ese layout: `perfil`, `cv`, `mis-cv` y `postulaciones*`.
@@ -44,6 +46,7 @@ protegidas, y `/perfil`, `/cv` y `/mis-cv` leyendo y escribiendo datos reales.
 - `AppShell`: menú de usuario con nombre/avatar y cierre de sesión (hoy es estático).
 
 ### 3. Perfil real
+
 - Server fns en `src/lib/perfil.functions.ts`: `getMiPerfil` y `guardarPerfil` contra `profiles`
   (nombre, email, teléfono, ubicación, rubro objetivo, firma de mail, preferencias).
 - Alta automática de la fila de `profiles` en el primer login, tomando nombre y mail de Google.
@@ -51,12 +54,14 @@ protegidas, y `/perfil`, `/cv` y `/mis-cv` leyendo y escribiendo datos reales.
   barra de completitud calculada sobre los datos reales.
 
 ### 4. CVs reales
+
 - Server fns en `src/lib/cv.functions.ts`: listar, obtener, crear, actualizar, duplicar y borrar
   sobre `resumes` (contenido en `jsonb`, igual que la estructura que ya usa el editor).
 - `/mis-cv`: lista real, duplicar y borrar persistidos; el modal de exportar sigue como está.
 - `/cv`: carga y guarda la versión seleccionada; el chat con Jack sigue simulado (la IA es Hito 3).
 
 ### 5. Cierre del hito
+
 - Tests: unit de los helpers de perfil/CV, y e2e de login (con sesión mockeada) y de guardar perfil.
 - Correr `lint`, `typecheck`, `test` y `build`.
 - Actualizar `CHANGELOG.txt` (v3.0) y tildar en `BACKLOG.md` lo que corresponda.
