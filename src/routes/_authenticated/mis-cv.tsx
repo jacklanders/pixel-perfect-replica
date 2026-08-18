@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate, useServerFn } from "@tanstack/react-router";
+import { useServerFn as useServerFnStart } from "@tanstack/react-start";
 import { useState } from "react";
 import { Copy, FileText, Loader2, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { type Cv } from "@/lib/cv.model";
-import { listarMisCvs, crearCv, duplicarCv, eliminarCv } from "@/lib/cv.functions";
+import { listarCvs, crearCv, duplicarCv, borrarCv } from "@/lib/cv.functions";
 import { PERFIL_VACIO } from "@/lib/perfil.model";
 
 export const Route = createFileRoute("/_authenticated/mis-cv")({
