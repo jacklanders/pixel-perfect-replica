@@ -22,6 +22,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { iniciales, nombreVisible } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/_authenticated/cv")({
+  validateSearch: (search: Record<string, unknown>) => z.object({ id: z.string().uuid().optional() }).parse(search),
   head: () => ({
     meta: [
       { title: "Editor de CV — Jack" },
