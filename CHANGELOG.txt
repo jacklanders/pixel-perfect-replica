@@ -45,6 +45,40 @@ v2.0 — Fase 2 (maqueta): postulaciones y envío de mail
 - AppShell: nueva entrada "Postulaciones" en el menú y contador de mails del
   día; enlace desde Mis CVs para usar una versión en una postulación.
 
-Pendiente para próximas versiones: login real con Google, base de datos y
-storage, API de Claude, envío por Gmail (OAuth), panel de administrador,
-búsqueda automática de avisos (Fase 3) y monetización (Fase 9).
+--------------------------------------------------------------------
+v3.0 — Hito 1: login real, rutas protegidas y UI conectada a Supabase
+--------------------------------------------------------------------
+- Infraestructura de auth:
+  * src/lib/supabase/client.ts — cliente de navegador tipado con manejo
+    defensivo de variables faltantes.
+  * src/lib/supabase/auth-middleware.ts — requireSupabaseAuth que valida
+    bearer token y ejecuta queries con RLS como el usuario autenticado.
+  * src/lib/supabase/auth-attacher.ts — middleware de cliente que adjunta
+    automáticamente el access token a cada server function.
+  * src/hooks/useAuth.ts — sesión, usuario, signOut y helpers de UI.
+  * src/routes/_authenticated/route.tsx — layout protegido (ssr: false) que
+    redirige a /login si no hay sesión.
+  * src/routes/login.tsx — login real con Google (signInWithOAuth), login por
+    email, redirect de retorno y aviso de configuración faltante.
+  * src/components/UserMenu.tsx — menú de usuario con avatar, iniciales y
+    cierre de sesión integrado en AppShell.
+  * src/start.ts — registrado attachSupabaseAuth en functionMiddleware.
+- Datos reales:
+  * src/lib/perfil.model.ts + src/lib/perfil.functions.ts — getMiPerfil
+    (alta automática en primer login) y guardarPerfil sobre la tabla profiles.
+  * src/lib/cv.model.ts + src/lib/cv.functions.ts — listar, crear, duplicar,
+    borrar, leer por ID y guardar resumes en Supabase.
+  * /perfil, /mis-cv y /cv reescritos para usar useServerFn + TanStack Query,
+    reemplazando los datos mockeados.
+- Tests: unitarios para perfil.model y cv.model en src/lib/__tests__.
+- /postulaciones/* sigue con datos simulados; se conecta en el Hito 2.
+
+Pendiente de integración:
+- Aplicar supabase/migrations/0001_init.sql en el proyecto Supabase Cloud.
+- Cargar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY (y la configuración de
+  Google OAuth en Supabase) para que el login real funcione en preview/producción.
+- Integrar el patch de backend de Claude que usa cookies @supabase/ssr si se
+  decide migrar de bearer tokens a ese modelo de sesión.
+- Tests E2E de login real una vez cargadas las credenciales (los tests E2E
+  mockeados existentes solo validan la UI y los contratos de integración).
+
