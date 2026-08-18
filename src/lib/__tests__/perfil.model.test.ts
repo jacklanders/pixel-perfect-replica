@@ -34,7 +34,7 @@ describe("perfil.model", () => {
     expect(firma).toContain("+54 9 11 1234 5678");
   });
 
-  it("firma sugerida devuelve texto genérico cuando faltan datos", () => {
-    expect(firmaSugerida(PERFIL_VACIO)).toContain("Atentamente");
+  it("firma sugerida devuelve cadena vacía cuando faltan todos los datos", () => {
+    expect(firmaSugerida(PERFIL_VACIO)).toBe("");
   });
 });
