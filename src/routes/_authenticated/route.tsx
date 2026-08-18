@@ -1,20 +1,21 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { getCurrentUser } from "@/lib/auth.functions";
 
+/**
+ * Guard real de las rutas privadas: corre `beforeLoad` en el servidor (SSR y en
+ * cada navegación), usando la cookie de sesión — no se puede saltear editando
+ * el cliente. Antes esto tenía `ssr: false` y chequeaba la sesión solo desde el
+ * browser client, lo cual no es una protección real (la primera respuesta HTML
+ * salía sin chequeo) y además usaba un mecanismo de sesión distinto al del
+ * resto del código. Se unificó a `getCurrentUser()` (cookies).
+ */
 export const Route = createFileRoute("/_authenticated")({
-  // La sesión de Supabase vive en cookies y la revalidamos desde el browser client.
-  ssr: false,
   beforeLoad: async ({ location }) => {
-    if (!isSupabaseConfigured) {
+    const user = await getCurrentUser();
+    if (!user) {
       throw redirect({ to: "/login", search: { redirect: location.href } });
     }
-
-    const supabase = getSupabaseBrowserClient();
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) {
-      throw redirect({ to: "/login", search: { redirect: location.href } });
-    }
-    return { user: data.user };
+    return { user };
   },
   component: () => <Outlet />,
 });

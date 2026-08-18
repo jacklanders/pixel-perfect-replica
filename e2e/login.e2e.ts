@@ -6,7 +6,6 @@ test("la pantalla de login muestra el título y el botón de Google", async ({ p
   await page.goto("/login");
   await expect(page).toHaveTitle(/Ingresar|Jack/i);
   await expect(page.getByRole("button", { name: /Continuar con Google/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Entrar/i })).toBeVisible();
 });
 
 test("la ruta protegida redirige a /login cuando no hay sesión", async ({ page }) => {

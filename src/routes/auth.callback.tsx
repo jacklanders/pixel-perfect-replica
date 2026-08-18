@@ -10,7 +10,7 @@ export const exchangeCodeForSession = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const supabase = getSupabaseServerClient();
     const { error } = await supabase.auth.exchangeCodeForSession(data.code);
-    return { ok: !error };
+    return { ok: !error, message: error?.message };
   });
 
 export const Route = createFileRoute("/auth/callback")({
@@ -28,6 +28,7 @@ export const Route = createFileRoute("/auth/callback")({
     const result = await exchangeCodeForSession({ data: { code } });
 
     if (!result.ok) {
+      console.error("[auth] Google OAuth code exchange failed:", result.message);
       throw redirect({ to: "/login", search: { error: "auth_fallo" } });
     }
 

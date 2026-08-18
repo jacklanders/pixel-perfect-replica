@@ -100,20 +100,46 @@ Functions, OAuth):
 4. Cada hito de backend se entrega como rama + diff/patch para mergear a `main` manualmente (o vía PR)
    y así Lovable lo levanta en su próxima sincronización.
 
-## Autenticación (Hito 1)
+## Autenticación (Hito 1, consolidado tras el incidente del 18/08)
 
-- Google login vía Supabase Auth (`supabase.auth.signInWithOAuth({ provider: "google" })` desde el
-  browser client), callback en `src/routes/auth.callback.tsx` que intercambia el `code` server-side.
-- Sesión en cookies (no localStorage) vía `@supabase/ssr`, para que server (`src/lib/supabase/server.ts`)
-  y browser (`src/lib/supabase/client.ts`) vean la misma sesión.
-- Rutas protegidas: `beforeLoad` en cada ruta llama a `getCurrentUser()` (`src/lib/server/auth.ts`,
-  `createServerFn`) y redirige a `/login` si no hay usuario. Esto es la protección real (corre
-  server-side); el estado que muestra el header (`UserMenu.tsx`) es solo cosmético.
-- Alta de perfil: trigger `handle_new_user` en Postgres (migración `0002`), no código de app — así el
-  perfil existe siempre, sin importar qué cliente dispare el signup.
-- **Parte menos probada de este hito:** `src/lib/supabase/server.ts` (adapter de cookies entre
-  `@supabase/ssr` y `@tanstack/react-start/server`). No se pudo correr un login real de Google en el
-  sandbox donde se armó el patch. Probar localmente antes de construir más features encima.
+**Un solo mecanismo de sesión: cookies, vía `@supabase/ssr`.** No volver a introducir un segundo
+sistema (bearer token, chequeo solo-cliente, etc.) sin borrar el anterior en el mismo cambio — el
+18/08 convivieron 3 sistemas de auth distintos a la vez (cookies, bearer token, y un guard solo-cliente
+con `ssr: false`) porque tres herramientas distintas tocaron auth sin coordinarse, y eso rompió el login
+de formas que dependían de qué ruta/función se ejecutara. Ver commit "fix auth: unificar a cookies".
+
+- Google login: `supabase.auth.signInWithOAuth({ provider: "google" })` desde el browser client
+  (`src/routes/login.tsx`), callback en `src/routes/auth.callback.tsx` que intercambia el `code`
+  server-side (`src/routes/auth.callback.tsx` → `exchangeCodeForSession`).
+- Server client con cookies: `src/lib/supabase/server.ts` (`getSupabaseServerClient`). Todo lo que
+  necesita saber quién es el usuario en el servidor pasa por acá — nunca por un header Authorization.
+- Middleware compartido para server functions: `src/lib/supabase/auth-middleware.ts`
+  (`requireSupabaseAuth`), usado por `perfil.functions.ts` y `cv.functions.ts`. Deja en `context`:
+  `supabase` (cliente ya autenticado como el usuario, RLS aplicada), `userId`, `email`, `userMetadata`.
+- Guard de rutas privadas: `src/routes/_authenticated/route.tsx`, `beforeLoad` server-side vía
+  `getCurrentUser()` en `src/lib/auth.functions.ts`. **No usar `ssr: false` en esta ruta** — eso vuelve el guard puramente
+  client-side, o sea sin protección real en el primer render.
+- Modelo de datos de perfil: `src/lib/perfil.model.ts` — `skills` y `resumen` viven dentro de
+  `profiles.preferencias` (jsonb), no en columnas dedicadas. Las columnas `avatar_url`/`skills` que
+  agregó la migración `0002` quedaron sin usar; no borrarlas todavía (evitar otra migración
+  apresurada), pero no asumir que tienen datos.
+- Alta de perfil: hay DOS mecanismos redundantes ahora mismo — el trigger `handle_new_user` en
+  Postgres (migración `0002`) Y un insert manual de fallback dentro de `getMiPerfil`
+  (`perfil.functions.ts`) si no encuentra fila. No es peligroso (ambos son idempotentes), pero es
+  redundante; limpiar cuando se toque perfil de nuevo.
+
+## Coordinación entre herramientas (importante, después del incidente del 18/08)
+
+Este proyecto se edita desde Lovable, Claude, GitHub Copilot y Gemini a la vez, manualmente vía VS Code.
+Eso ya causó una regresión real (tres sistemas de auth simultáneos, un `.env.example` borrado por
+accidente en un commit con mensaje que no describía el cambio). Regla mínima para que no se repita:
+
+- Antes de pedirle un cambio de auth/perfil/CV a una herramienta, decirle explícitamente qué archivos
+  NO tocar si otra herramienta ya está trabajando ahí.
+- Revisar el diff (`git diff` o el patch) antes de commitear, no solo confiar en "tests pasaron".
+- Un commit = un cambio identificable. Si el mensaje dice "RLS", el diff tiene que ser RLS.
+- Si dos herramientas proponen arreglar lo mismo, aplicar una sola propuesta completa, no mezclar
+  fragmentos de ambas.
 
 ## Definition of Done (por hito)
 

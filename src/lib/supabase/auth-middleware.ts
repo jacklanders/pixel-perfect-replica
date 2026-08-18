@@ -1,36 +1,23 @@
 import { createMiddleware } from "@tanstack/react-start";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
- * Valida el bearer token del request y deja en contexto un cliente Supabase que
- * actúa como el usuario (RLS aplicada, nunca service_role).
+ * Valida la sesión (cookies, no bearer token) y deja en contexto un cliente
+ * Supabase que actúa como el usuario (RLS aplicada, nunca service_role).
+ *
+ * Antes esto leía un header `Authorization: Bearer <token>` (ver historial de
+ * auth-attacher.ts, ya eliminado) — se unificó a cookies porque convivían dos
+ * mecanismos de sesión distintos en el mismo repo (uno por función de servidor
+ * vía bearer, otro por ruta vía cookies), y eso rompía el login de formas
+ * inconsistentes según qué código corriera. El `context` de salida es el mismo
+ * de antes (`supabase`, `userId`, `email`, `userMetadata`), así que
+ * perfil.functions.ts / cv.functions.ts no necesitan cambios.
  */
 export const requireSupabaseAuth = createMiddleware({ type: "function" }).server(
   async ({ next }) => {
-    const { getRequestHeader } = await import("@tanstack/react-start/server");
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser();
 
-    const authHeader = getRequestHeader("authorization");
-    const token = authHeader?.toLowerCase().startsWith("bearer ")
-      ? authHeader.slice(7).trim()
-      : undefined;
-
-    if (!token) {
-      throw new Response("Unauthorized", { status: 401 });
-    }
-
-    const url = process.env["SUPABASE_URL"] ?? process.env["VITE_SUPABASE_URL"];
-    const anonKey = process.env["SUPABASE_ANON_KEY"] ?? process.env["VITE_SUPABASE_ANON_KEY"];
-
-    if (!url || !anonKey) {
-      throw new Error("Faltan SUPABASE_URL / SUPABASE_ANON_KEY en el servidor.");
-    }
-
-    const supabase: SupabaseClient = createClient(url, anonKey, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-
-    const { data, error } = await supabase.auth.getUser(token);
     if (error || !data.user) {
       throw new Response("Unauthorized", { status: 401 });
     }
