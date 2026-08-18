@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { useEffect, useState } from "react";
 import { Bot, Download, Loader2, MessageSquare, Save, Sparkles } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
