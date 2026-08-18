@@ -163,7 +163,7 @@ function CvEditorPage() {
     );
   };
 
-  const updateExperiencia = (idx: number, field: string, value: string) => {
+  const updateExperiencia = (idx: number, field: keyof Cv["contenido"]["experiencia"][number], value: string) => {
     setForm((prev) => {
       if (!prev) return prev;
       const exp = [...prev.contenido.experiencia];
