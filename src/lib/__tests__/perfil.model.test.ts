@@ -9,6 +9,7 @@ describe("perfil.model", () => {
   it("calcula progreso 100% para perfil completo", () => {
     const perfil: Perfil = {
       ...PERFIL_VACIO,
+      email: "juan@ejemplo.com",
       nombre: "Juan Pérez",
       rubroObjetivo: "Desarrollador Full Stack",
       resumen: "Más de 5 años de experiencia en desarrollo web.",
