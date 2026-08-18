@@ -36,6 +36,8 @@ No implementar nada de esto durante Fases 1 y 2 / Hitos 0–5, salvo decisión e
       conflictos de forma manual, sin sobreescribir su trabajo.
 - [ ] Cargar variables VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en el proyecto.
 - [ ] Tests E2E de login real una vez disponibles las credenciales.
+- [ ] Resolver disponibilidad de navegadores en el sandbox de Lovable (Playwright 1.62.1
+      busca Chromium 1234, pero el entorno provee 1194) para poder correr `test:e2e` aquí.
 
 ## Mejoras evaluadas para después del MVP
 
