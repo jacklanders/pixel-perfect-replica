@@ -35,7 +35,7 @@ export const getMiPerfil = createServerFn({ method: "GET" })
 
 export const guardarPerfil = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => perfilSchema.parse(input))
+  .validator((input: unknown) => perfilSchema.parse(input))
   .handler(async ({ data, context }): Promise<Perfil> => {
     const { supabase, userId, email } = context;
 

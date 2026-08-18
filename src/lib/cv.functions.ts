@@ -6,7 +6,7 @@ import type { ResumeRow } from "@/lib/supabase/types";
 
 export const getCvById = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }): Promise<Cv> => {
     const { data: fila, error } = await context.supabase
       .from("resumes")
