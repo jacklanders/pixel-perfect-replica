@@ -166,8 +166,9 @@ function CvEditorPage() {
   const updateExperiencia = (idx: number, field: keyof Cv["contenido"]["experiencia"][number], value: string) => {
     setForm((prev) => {
       if (!prev) return prev;
-      const exp = [...prev.contenido.experiencia];
-      exp[idx] = { ...exp[idx], [field]: value };
+      const exp = prev.contenido.experiencia.map((item, i) =>
+        i === idx ? ({ ...item, [field]: value } as Cv["contenido"]["experiencia"][number]) : item,
+      );
       return { ...prev, contenido: { ...prev.contenido, experiencia: exp } };
     });
   };
