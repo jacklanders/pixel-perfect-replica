@@ -8,8 +8,20 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { type Cv } from "@/lib/cv.model";
@@ -22,7 +34,10 @@ export const Route = createFileRoute("/_authenticated/mis-cv")({
       { title: "Mis CVs — Jack" },
       { name: "description", content: "Versiones de tu CV. Duplicá, editá y exportá a PDF." },
       { property: "og:title", content: "Mis CVs — Jack" },
-      { property: "og:description", content: "Versiones de tu CV. Duplicá, editá y exportá a PDF." },
+      {
+        property: "og:description",
+        content: "Versiones de tu CV. Duplicá, editá y exportá a PDF.",
+      },
     ],
   }),
   component: MisCvsPage,
@@ -44,7 +59,12 @@ function MisCvsPage() {
   const duplicateCv = useServerFn(duplicarCv);
   const deleteCv = useServerFn(borrarCv);
 
-  const { data: cvs = [], isPending, isError, error } = useQuery({
+  const {
+    data: cvs = [],
+    isPending,
+    isError,
+    error,
+  } = useQuery({
     queryKey: misCvsQueryKey,
     queryFn: () => fetchList(),
   });
@@ -103,7 +123,10 @@ function MisCvsPage() {
       <AppShell title="Mis CVs" subtitle="No se pudieron cargar los CVs.">
         <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-soft">
           <p className="text-sm text-destructive">{error?.message ?? "Error"}</p>
-          <Button className="mt-4" onClick={() => queryClient.invalidateQueries({ queryKey: misCvsQueryKey })}>
+          <Button
+            className="mt-4"
+            onClick={() => queryClient.invalidateQueries({ queryKey: misCvsQueryKey })}
+          >
             Reintentar
           </Button>
         </div>
@@ -112,11 +135,20 @@ function MisCvsPage() {
   }
 
   return (
-    <AppShell title="Mis CVs" subtitle="Versiones guardadas. Tu versión principal es la que se adjunta por defecto.">
+    <AppShell
+      title="Mis CVs"
+      subtitle="Versiones guardadas. Tu versión principal es la que se adjunta por defecto."
+    >
       <div className="mb-6 flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{cvs.length} versión{cvs.length === 1 ? "" : "es"} guardada</p>
+        <p className="text-sm text-muted-foreground">
+          {cvs.length} versión{cvs.length === 1 ? "" : "es"} guardada
+        </p>
         <Button onClick={() => crearMutation.mutate()} disabled={crearMutation.isPending}>
-          {crearMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+          {crearMutation.isPending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Plus className="size-4" />
+          )}
           Nuevo CV
         </Button>
       </div>
@@ -125,8 +157,14 @@ function MisCvsPage() {
         <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
           <FileText className="mx-auto size-10 text-muted-foreground" />
           <p className="mt-4 font-medium">Aún no tenés CVs guardados</p>
-          <p className="text-sm text-muted-foreground">Creá tu primera versión para empezar a postularte.</p>
-          <Button className="mt-6" onClick={() => crearMutation.mutate()} disabled={crearMutation.isPending}>
+          <p className="text-sm text-muted-foreground">
+            Creá tu primera versión para empezar a postularte.
+          </p>
+          <Button
+            className="mt-6"
+            onClick={() => crearMutation.mutate()}
+            disabled={crearMutation.isPending}
+          >
             Crear mi primer CV
           </Button>
         </div>
@@ -195,7 +233,9 @@ function CvCard({
         </div>
         {cv.isPrimary ? <Badge variant="default">Principal</Badge> : null}
       </div>
-      <p className="text-xs text-muted-foreground">{cv.version ? `v${cv.version}` : "v1"} · Actualizado recientemente</p>
+      <p className="text-xs text-muted-foreground">
+        {cv.version ? `v${cv.version}` : "v1"} · Actualizado recientemente
+      </p>
       <div className="mt-auto flex items-center gap-2">
         <Button variant="outline" size="sm" className="flex-1" asChild>
           <Link to="/cv" search={{ id: cv.id }}>
@@ -212,7 +252,11 @@ function CvCard({
             <DropdownMenuItem onClick={onDuplicar} disabled={duplicando || eliminando}>
               <Copy className="mr-2 size-4" /> Duplicar
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={onEliminar} disabled={duplicando || eliminando} className="text-destructive">
+            <DropdownMenuItem
+              onClick={onEliminar}
+              disabled={duplicando || eliminando}
+              className="text-destructive"
+            >
               <Trash2 className="mr-2 size-4" /> Eliminar
             </DropdownMenuItem>
           </DropdownMenuContent>

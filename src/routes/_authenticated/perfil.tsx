@@ -76,7 +76,10 @@ function PerfilPage() {
       <AppShell title="Tu perfil" subtitle="No se pudieron cargar los datos.">
         <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-soft">
           <p className="text-sm text-destructive">{error?.message ?? "Error desconocido"}</p>
-          <Button className="mt-4" onClick={() => queryClient.invalidateQueries({ queryKey: perfilQueryKey })}>
+          <Button
+            className="mt-4"
+            onClick={() => queryClient.invalidateQueries({ queryKey: perfilQueryKey })}
+          >
             Reintentar
           </Button>
         </div>
@@ -89,7 +92,11 @@ function PerfilPage() {
       title="Tu perfil"
       subtitle="Jack usa estos datos para escribir tu CV y tus postulaciones."
     >
-      <PerfilForm perfil={data} onSubmit={(p) => mutation.mutate(p)} guardando={mutation.isPending} />
+      <PerfilForm
+        perfil={data}
+        onSubmit={(p) => mutation.mutate(p)}
+        guardando={mutation.isPending}
+      />
     </AppShell>
   );
 }
@@ -142,7 +149,9 @@ function PerfilForm({
       <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
         <div className="flex items-center gap-4">
           <Avatar className="size-14">
-            <AvatarFallback className="bg-secondary text-secondary-foreground">{initials}</AvatarFallback>
+            <AvatarFallback className="bg-secondary text-secondary-foreground">
+              {initials}
+            </AvatarFallback>
           </Avatar>
           <div>
             <p className="font-display text-lg font-bold">{name}</p>
@@ -233,7 +242,13 @@ function PerfilForm({
                 className="h-7 w-32 text-xs"
                 maxLength={60}
               />
-              <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={agregarSkill}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={agregarSkill}
+              >
                 + agregar
               </Button>
             </div>
@@ -256,7 +271,10 @@ function PerfilForm({
           <p className="text-sm font-medium">Perfil completo</p>
           <Progress value={completitud} className="mt-3" />
           <p className="mt-2 text-xs text-muted-foreground">
-            {completitud}% — {completitud < 100 ? "completá lo que falta para mejores sugerencias" : "listo para postular"}
+            {completitud}% —{" "}
+            {completitud < 100
+              ? "completá lo que falta para mejores sugerencias"
+              : "listo para postular"}
           </p>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             {["Datos personales", "Skills", "Firma de mail"].map((i) => (
@@ -270,7 +288,9 @@ function PerfilForm({
 
         <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
           <p className="text-sm font-medium">Firma de mail</p>
-          <p className="mt-1 text-xs text-muted-foreground">Se reutiliza en todas tus postulaciones.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Se reutiliza en todas tus postulaciones.
+          </p>
           <Textarea
             value={firma}
             onChange={(e) => update("firmaMail", e.target.value)}
@@ -278,7 +298,13 @@ function PerfilForm({
             className="mt-4 resize-none bg-muted text-sm leading-relaxed"
             maxLength={1000}
           />
-          <Button variant="outline" size="sm" className="mt-4" type="button" onClick={() => update("firmaMail", firmaSugerida(form))}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4"
+            type="button"
+            onClick={() => update("firmaMail", firmaSugerida(form))}
+          >
             Restaurar firma sugerida
           </Button>
         </section>

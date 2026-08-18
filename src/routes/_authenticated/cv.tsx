@@ -22,11 +22,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { iniciales, nombreVisible } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/_authenticated/cv")({
-  validateSearch: (search: Record<string, unknown>) => z.object({ id: z.string().uuid().optional() }).parse(search),
+  validateSearch: (search: Record<string, unknown>) =>
+    z.object({ id: z.string().uuid().optional() }).parse(search),
   head: () => ({
     meta: [
       { title: "Editor de CV — Jack" },
-      { name: "description", content: "Editá tu CV con Jack. Mejorá el perfil, experiencias y descargá PDF." },
+      {
+        name: "description",
+        content: "Editá tu CV con Jack. Mejorá el perfil, experiencias y descargá PDF.",
+      },
       { property: "og:title", content: "Editor de CV — Jack" },
       { property: "og:description", content: "Editor colaborativo con IA para tu CV." },
     ],
@@ -60,7 +64,12 @@ function CvEditorPage() {
     queryFn: () => fetchPerfil(),
   });
 
-  const { data: cv, isPending, isError, error } = useQuery({
+  const {
+    data: cv,
+    isPending,
+    isError,
+    error,
+  } = useQuery({
     queryKey: cvQueryKey(id ?? "primario"),
     queryFn: async () => {
       if (id) return fetchCv({ data: { id } });
@@ -90,7 +99,8 @@ function CvEditorPage() {
   }, [cv]);
 
   const mutation = useMutation({
-    mutationFn: (cv: Cv) => saveCv({ data: { id: cv.id, title: cv.title, contenido: cv.contenido } }),
+    mutationFn: (cv: Cv) =>
+      saveCv({ data: { id: cv.id, title: cv.title, contenido: cv.contenido } }),
     onSuccess: (updated) => {
       queryClient.setQueryData(cvQueryKey(updated.id), updated);
       queryClient.invalidateQueries({ queryKey: misCvsQueryKey });
@@ -110,7 +120,11 @@ function CvEditorPage() {
     setTimeout(() => {
       setMensajes((prev) => [
         ...prev,
-        { de: "jack", texto: "Buen punto. Podrías reforzar el perfil con logros concretos. ¿Querés que te sugiera un redactado?" },
+        {
+          de: "jack",
+          texto:
+            "Buen punto. Podrías reforzar el perfil con logros concretos. ¿Querés que te sugiera un redactado?",
+        },
       ]);
     }, 800);
     setMensaje("");
@@ -130,7 +144,11 @@ function CvEditorPage() {
         <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-soft">
           <p className="text-sm text-destructive">{error?.message ?? "Error desconocido"}</p>
           <div className="mt-4 flex justify-center gap-3">
-            <Button onClick={() => queryClient.invalidateQueries({ queryKey: cvQueryKey(id ?? "primario") })}>
+            <Button
+              onClick={() =>
+                queryClient.invalidateQueries({ queryKey: cvQueryKey(id ?? "primario") })
+              }
+            >
               Reintentar
             </Button>
             <Button variant="ghost" asChild>
@@ -163,7 +181,11 @@ function CvEditorPage() {
     );
   };
 
-  const updateExperiencia = (idx: number, field: keyof Cv["contenido"]["experiencia"][number], value: string) => {
+  const updateExperiencia = (
+    idx: number,
+    field: keyof Cv["contenido"]["experiencia"][number],
+    value: string,
+  ) => {
     setForm((prev) => {
       if (!prev) return prev;
       const exp = prev.contenido.experiencia.map((item, i) =>
@@ -176,7 +198,13 @@ function CvEditorPage() {
   const eliminarExperiencia = (idx: number) => {
     setForm((prev) => {
       if (!prev) return prev;
-      return { ...prev, contenido: { ...prev.contenido, experiencia: prev.contenido.experiencia.filter((_, i) => i !== idx) } };
+      return {
+        ...prev,
+        contenido: {
+          ...prev.contenido,
+          experiencia: prev.contenido.experiencia.filter((_, i) => i !== idx),
+        },
+      };
     });
   };
 
@@ -199,7 +227,9 @@ function CvEditorPage() {
                 <Input
                   id="titulo"
                   value={form.title}
-                  onChange={(e) => setForm((prev) => (prev ? { ...prev, title: e.target.value } : prev))}
+                  onChange={(e) =>
+                    setForm((prev) => (prev ? { ...prev, title: e.target.value } : prev))
+                  }
                   className="mt-1"
                   maxLength={160}
                 />
@@ -226,8 +256,16 @@ function CvEditorPage() {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <Button type="button" onClick={() => mutation.mutate(form)} disabled={mutation.isPending}>
-                  {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                <Button
+                  type="button"
+                  onClick={() => mutation.mutate(form)}
+                  disabled={mutation.isPending}
+                >
+                  {mutation.isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Save className="size-4" />
+                  )}
                   Guardar
                 </Button>
                 <Button variant="outline" type="button" asChild>
@@ -269,7 +307,12 @@ function CvEditorPage() {
                       maxLength={2000}
                     />
                     <div className="mt-2 flex justify-end">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => eliminarExperiencia(idx)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => eliminarExperiencia(idx)}
+                      >
                         Eliminar
                       </Button>
                     </div>
@@ -289,11 +332,17 @@ function CvEditorPage() {
                 </p>
               </div>
               <div className="mb-6">
-                <h3 className="font-display mb-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">Perfil</h3>
-                <p className="whitespace-pre-line text-sm leading-relaxed">{form.contenido.perfil}</p>
+                <h3 className="font-display mb-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                  Perfil
+                </h3>
+                <p className="whitespace-pre-line text-sm leading-relaxed">
+                  {form.contenido.perfil}
+                </p>
               </div>
               <div>
-                <h3 className="font-display mb-3 text-sm font-bold uppercase tracking-wide text-muted-foreground">Experiencia</h3>
+                <h3 className="font-display mb-3 text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                  Experiencia
+                </h3>
                 <div className="space-y-4">
                   {form.contenido.experiencia.map((exp) => (
                     <div key={exp.id}>
@@ -330,7 +379,9 @@ function CvEditorPage() {
                 )}
                 <div
                   className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                    m.de === "yo" ? "bg-primary text-primary-foreground" : "bg-card text-card-foreground"
+                    m.de === "yo"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-card text-card-foreground"
                   }`}
                 >
                   {m.texto}
@@ -369,7 +420,13 @@ function CvEditorPage() {
               rows={2}
               className="resize-none text-sm"
             />
-            <Button type="button" size="icon" className="shrink-0" onClick={enviarMensaje} disabled={!mensaje.trim()}>
+            <Button
+              type="button"
+              size="icon"
+              className="shrink-0"
+              onClick={enviarMensaje}
+              disabled={!mensaje.trim()}
+            >
               <MessageSquare className="size-4" />
             </Button>
           </div>

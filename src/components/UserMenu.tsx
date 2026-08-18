@@ -66,7 +66,10 @@ export function UserMenu() {
             Perfil
           </a>
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={handleSignOut} className="flex cursor-pointer items-center gap-2">
+        <DropdownMenuItem
+          onClick={handleSignOut}
+          className="flex cursor-pointer items-center gap-2"
+        >
           <LogOut className="size-4" />
           Cerrar sesión
         </DropdownMenuItem>
