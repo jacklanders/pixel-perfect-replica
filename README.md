@@ -39,6 +39,27 @@ bun run dev
 Para conectar contra un proyecto Supabase remoto: `supabase link --project-ref <ref>` y
 `supabase db push` en vez de `db reset`.
 
+## Login con Google (Hito 1)
+
+1. En [Google Cloud Console](https://console.cloud.google.com/apis/credentials), crear (o reusar) un
+   **OAuth 2.0 Client ID** de tipo "Web application".
+2. En "Authorized redirect URIs" agregar la URL de callback de **Supabase**, no la de la app:
+   - Local (Docker): `http://127.0.0.1:54321/auth/v1/callback`
+   - Proyecto remoto: `https://<tu-proyecto>.supabase.co/auth/v1/callback`
+3. Copiar el Client ID y el Client Secret a `.env.local` (`GOOGLE_OAUTH_CLIENT_ID`,
+   `GOOGLE_OAUTH_CLIENT_SECRET`).
+4. Antes de `supabase start`, exportar esas dos variables en la terminal (la CLI las lee del entorno
+   para resolver `env(...)` en `supabase/config.toml`):
+   ```sh
+   export GOOGLE_OAUTH_CLIENT_ID="..."
+   export GOOGLE_OAUTH_CLIENT_SECRET="..."
+   # PowerShell: $env:GOOGLE_OAUTH_CLIENT_ID="..."
+   supabase start
+   ```
+5. Probar en `/login` → "Continuar con Google". Debería volver autenticado a `/perfil` y, al recargar
+   la página, seguir logueado (si no persiste el login, revisar `src/lib/supabase/server.ts` — es la
+   parte menos probada de este hito, ver el comentario al principio de ese archivo).
+
 ## Comandos de calidad
 
 ```sh

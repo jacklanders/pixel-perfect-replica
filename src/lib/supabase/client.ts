@@ -1,23 +1,21 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+
+const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] as string;
+const supabaseAnonKey = import.meta.env["VITE_SUPABASE_ANON_KEY"] as string;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  // Falla rápido y claro en dev en vez de un error de red confuso más adelante.
+  console.error(
+    "[supabase] Faltan VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. Copiá .env.example a .env.local y completá los valores de `supabase start`.",
+  );
+}
 
 /**
- * Cliente de navegador contra el proyecto Supabase propio (externo, no Lovable Cloud).
- * Las claves son públicas: el límite real de acceso son las policies RLS.
+ * Cliente de Supabase para código que corre en el navegador. Usa cookies (no
+ * localStorage) para la sesión, vía @supabase/ssr — así el server client
+ * (src/lib/supabase/server.ts) ve la misma sesión en cada request SSR, sin
+ * duplicar el manejo de tokens entre cliente y servidor.
  */
-const url = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
-const anonKey = import.meta.env["VITE_SUPABASE_ANON_KEY"] as string | undefined;
-
-export const isSupabaseConfigured = Boolean(url && anonKey);
-
-export const supabase: SupabaseClient = createClient(
-  url ?? "https://supabase-sin-configurar.invalid",
-  anonKey ?? "anon-key-sin-configurar",
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      storageKey: "jack-auth",
-    },
-  },
-);
+export function getSupabaseBrowserClient() {
+  return createBrowserClient(supabaseUrl, supabaseAnonKey);
+}

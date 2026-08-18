@@ -1,10 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Puerto confirmado en local: 8080 (visto en pantalla al correr `bun run dev`).
 const PORT = process.env.PORT ?? "8080";
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: /.*\.e2e\.(ts|js)|.*\.spec\.(ts|js)/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

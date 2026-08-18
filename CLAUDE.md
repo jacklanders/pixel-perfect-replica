@@ -70,7 +70,7 @@ Playwright con mocks de IA/Gmail — sin depender de servicios externos reales e
 - Ninguna verificación de rol admin vive solo en frontend — siempre repetida server-side (RLS y/o
   `createServerFn` que llama `has_role()` antes de escribir).
 - Toda función `security definer` lleva `set search_path = public` y un `REVOKE EXECUTE ... FROM
-PUBLIC` explícito antes de otorgar `EXECUTE` solo a los roles que la necesitan — Postgres deja
+  PUBLIC` explícito antes de otorgar `EXECUTE` solo a los roles que la necesitan — Postgres deja
   `EXECUTE` abierto a `PUBLIC` (incluido `anon`) por default si no se revoca.
 - Datos sensibles que nunca deben ser legibles por el cliente (ej. `oauth_connections.encrypted_refresh_token`)
   van en una tabla con RLS habilitado y **sin ninguna policy ni GRANT** para `anon`/`authenticated` — solo
@@ -100,11 +100,25 @@ Functions, OAuth):
 4. Cada hito de backend se entrega como rama + diff/patch para mergear a `main` manualmente (o vía PR)
    y así Lovable lo levanta en su próxima sincronización.
 
+## Autenticación (Hito 1)
+
+- Google login vía Supabase Auth (`supabase.auth.signInWithOAuth({ provider: "google" })` desde el
+  browser client), callback en `src/routes/auth.callback.tsx` que intercambia el `code` server-side.
+- Sesión en cookies (no localStorage) vía `@supabase/ssr`, para que server (`src/lib/supabase/server.ts`)
+  y browser (`src/lib/supabase/client.ts`) vean la misma sesión.
+- Rutas protegidas: `beforeLoad` en cada ruta llama a `getCurrentUser()` (`src/lib/server/auth.ts`,
+  `createServerFn`) y redirige a `/login` si no hay usuario. Esto es la protección real (corre
+  server-side); el estado que muestra el header (`UserMenu.tsx`) es solo cosmético.
+- Alta de perfil: trigger `handle_new_user` en Postgres (migración `0002`), no código de app — así el
+  perfil existe siempre, sin importar qué cliente dispare el signup.
+- **Parte menos probada de este hito:** `src/lib/supabase/server.ts` (adapter de cookies entre
+  `@supabase/ssr` y `@tanstack/react-start/server`). No se pudo correr un login real de Google en el
+  sandbox donde se armó el patch. Probar localmente antes de construir más features encima.
+
 ## Definition of Done (por hito)
 
 Ver criterios completos en el prompt de producto. Resumen operativo: el hito no está terminado si falta
 alguno de estos puntos:
-
 - Ruta usable de punta a punta (no capas sueltas de frontend/backend).
 - Lint + typecheck + tests afectados + build en verde.
 - RLS verificado para toda tabla nueva.
@@ -118,3 +132,4 @@ alguno de estos puntos:
 - **Proveedor de IA runtime:** `AI_PROVIDER=anthropic|gemini`, llamado únicamente desde
   `src/lib/server/`, nunca desde el navegador.
 - **Rol admin:** tabla `user_roles` + `has_role()`, no columna en `profiles`.
+- **Auth:** cookies vía `@supabase/ssr` (no localStorage), `beforeLoad` por ruta como guard real.

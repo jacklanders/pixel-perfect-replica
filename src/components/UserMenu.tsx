@@ -1,79 +1,55 @@
-import { useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { LogOut, User } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useAuth, nombreVisible, iniciales } from "@/hooks/useAuth";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
+/**
+ * Muestra "Ingresar" o "Salir" según la sesión del browser client. Es solo UI:
+ * la protección real de rutas pasa por `beforeLoad` (server-side, ver
+ * src/lib/server/auth.ts) + RLS en Supabase, no por lo que se muestre acá.
+ */
 export function UserMenu() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { user, cargando } = useAuth();
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
 
-  const name = nombreVisible(user);
-  const initials = iniciales(name);
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
 
-  const handleSignOut = async () => {
-    await queryClient.cancelQueries();
-    queryClient.clear();
-    // El signOut real lo hace la implementación del hook de auth (localStorage hoy,
-    // cookies cuando entre el patch de Claude). Limpiamos caché y navegamos.
-    const { supabase } = await import("@/lib/supabase/client");
-    await supabase.auth.signOut();
-    navigate({ to: "/login", replace: true });
-  };
+    supabase.auth.getSession().then(({ data }) => {
+      setLoggedIn(!!data.session);
+    });
 
-  if (cargando || !user) {
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      setLoggedIn(!!session);
+    });
+
+    return () => subscription.subscription.unsubscribe();
+  }, []);
+
+  if (loggedIn === null) {
+    // Placeholder del mismo tamaño para no saltar el layout mientras se resuelve.
+    return <div className="h-9 w-24" aria-hidden="true" />;
+  }
+
+  if (!loggedIn) {
     return (
-      <div className="flex items-center gap-2">
-        <div className="bg-muted h-8 w-8 animate-pulse rounded-full" />
-        <div className="bg-muted h-4 w-24 animate-pulse rounded" />
-      </div>
+      <Button asChild size="sm">
+        <Link to="/login">Ingresar</Link>
+      </Button>
     );
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="flex items-center gap-2 px-2">
-          <Avatar className="size-8">
-            <AvatarFallback className="bg-secondary text-xs font-medium text-secondary-foreground">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <span className="max-w-[120px] truncate text-sm font-medium">{name}</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col gap-1">
-            <span className="text-sm font-medium">{name}</span>
-            <span className="text-xs text-muted-foreground">{user.email}</span>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <a href="/perfil" className="flex cursor-pointer items-center gap-2">
-            <User className="size-4" />
-            Perfil
-          </a>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={handleSignOut}
-          className="flex cursor-pointer items-center gap-2"
-        >
-          <LogOut className="size-4" />
-          Cerrar sesión
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={async () => {
+        const supabase = getSupabaseBrowserClient();
+        await supabase.auth.signOut();
+        void navigate({ to: "/" });
+      }}
+    >
+      Salir
+    </Button>
   );
 }

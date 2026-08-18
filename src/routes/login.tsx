@@ -1,26 +1,16 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { z } from "zod";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { JackMark } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
-
-const searchSchema = z.object({
-  redirect: z.string().optional(),
-});
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export const Route = createFileRoute("/login")({
-  validateSearch: searchSchema,
   head: () => ({
     meta: [
       { title: "Ingresar a Jack" },
       {
         name: "description",
-        content: "Entrá a Jack con tu cuenta de Google o tu email para trabajar en tu CV.",
+        content: "Entrá a Jack con tu cuenta de Google para trabajar en tu CV.",
       },
       { property: "og:title", content: "Ingresar a Jack" },
       {
@@ -32,57 +22,26 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-function destinoSeguro(redirectParam?: string): string {
-  if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")) {
-    return redirectParam;
-  }
-  return "/perfil";
-}
-
 function LoginPage() {
-  const { redirect } = Route.useSearch();
-  const navigate = useNavigate();
-  const { session, cargando } = useAuth();
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [enviando, setEnviando] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
 
-  useEffect(() => {
-    if (!cargando && session) {
-      navigate({ to: destinoSeguro(redirect), replace: true });
-    }
-  }, [cargando, session, redirect, navigate]);
-
-  const entrarConGoogle = async () => {
+  async function handleGoogleLogin() {
     setError(null);
-    if (!isSupabaseConfigured) {
-      setError("Falta configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.");
-      return;
-    }
-    const destino = destinoSeguro(redirect);
-    const { error: err } = await supabase.auth.signInWithOAuth({
+    setLoading(true);
+    const supabase = getSupabaseBrowserClient();
+    const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}${destino}`,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
-    if (err) setError(err.message);
-  };
-
-  const entrarConEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (!isSupabaseConfigured) {
-      setError("Falta configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.");
-      return;
+    if (authError) {
+      setError("No se pudo iniciar el login con Google. Probá de nuevo.");
+      setLoading(false);
     }
-    setEnviando(true);
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-    setEnviando(false);
-    if (err) setError(err.message);
-    else navigate({ to: destinoSeguro(redirect), replace: true });
-  };
+    // Si no hay error, el navegador ya está siendo redirigido a Google.
+  }
 
   return (
     <div className="grid min-h-screen md:grid-cols-2">
@@ -113,57 +72,18 @@ function LoginPage() {
             variant="outline"
             className="mt-7 w-full"
             size="lg"
-            onClick={entrarConGoogle}
-            type="button"
+            onClick={handleGoogleLogin}
+            disabled={loading}
           >
-            Continuar con Google
+            {loading ? "Redirigiendo a Google…" : "Continuar con Google"}
           </Button>
 
-          <div className="my-6 flex items-center gap-3">
-            <Separator className="flex-1" />
-            <span className="text-xs text-muted-foreground">o</span>
-            <Separator className="flex-1" />
-          </div>
+          {error ? <p className="mt-4 text-sm text-destructive">{error}</p> : null}
 
-          <form className="space-y-4" onSubmit={entrarConEmail}>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="vos@email.com"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            <Button className="w-full" size="lg" type="submit" disabled={enviando}>
-              {enviando ? "Entrando…" : "Entrar"}
-            </Button>
-          </form>
-
-          {error ? (
-            <p role="alert" className="mt-4 text-sm text-destructive">
-              {error}
-            </p>
-          ) : null}
-
-          {!isSupabaseConfigured ? (
-            <p className="mt-6 text-xs text-muted-foreground">
-              Supabase todavía no está configurado en este entorno: cargá VITE_SUPABASE_URL y
-              VITE_SUPABASE_ANON_KEY para habilitar el login real.
-            </p>
-          ) : null}
+          <p className="mt-6 text-xs text-muted-foreground">
+            Solo pedimos tu identidad de Google. El envío de mails desde tu Gmail se habilita
+            aparte, más adelante, con tu confirmación explícita.
+          </p>
         </div>
       </div>
     </div>

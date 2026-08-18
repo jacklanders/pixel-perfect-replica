@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Button } from "@/components/ui/button";
+import { UserMenu } from "@/components/UserMenu";
 
 export function JackMark({ className = "" }: { className?: string }) {
   return (
@@ -27,9 +27,7 @@ export function SiteHeader() {
             Mi CV
           </Link>
         </nav>
-        <Button asChild size="sm">
-          <Link to="/login">Ingresar</Link>
-        </Button>
+        <UserMenu />
       </div>
     </header>
   );
