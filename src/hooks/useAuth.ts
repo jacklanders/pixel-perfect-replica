@@ -12,13 +12,15 @@ export function useAuth() {
       return;
     }
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setCargando(false);
-    });
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      (_event: string, nextSession: Session | null) => {
+        setSession(nextSession);
+        setCargando(false);
+      },
+    );
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      setSession(currentSession);
       setCargando(false);
     });
 

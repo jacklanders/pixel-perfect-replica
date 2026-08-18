@@ -1,14 +1,23 @@
 import { createBrowserClient } from "@supabase/ssr";
 
-const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] as string;
-const supabaseAnonKey = import.meta.env["VITE_SUPABASE_ANON_KEY"] as string;
+const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
+const supabaseAnonKey = import.meta.env["VITE_SUPABASE_ANON_KEY"] as string | undefined;
 
-if (!supabaseUrl || !supabaseAnonKey) {
+export const isSupabaseConfigured = !!supabaseUrl && !!supabaseAnonKey;
+
+if (!isSupabaseConfigured) {
   // Falla rápido y claro en dev en vez de un error de red confuso más adelante.
   console.error(
     "[supabase] Faltan VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. Copiá .env.example a .env.local y completá los valores de `supabase start`.",
   );
 }
+
+const browserClient = createBrowserClient(
+  supabaseUrl ?? "https://placeholder.supabase.co",
+  supabaseAnonKey ?? "placeholder-anon-key",
+);
+
+export const supabase = browserClient;
 
 /**
  * Cliente de Supabase para código que corre en el navegador. Usa cookies (no
@@ -17,5 +26,5 @@ if (!supabaseUrl || !supabaseAnonKey) {
  * duplicar el manejo de tokens entre cliente y servidor.
  */
 export function getSupabaseBrowserClient() {
-  return createBrowserClient(supabaseUrl, supabaseAnonKey);
+  return browserClient;
 }

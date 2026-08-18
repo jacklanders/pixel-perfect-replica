@@ -16,6 +16,7 @@ import { Route as AuthenticatedCvRouteImport } from './routes/_authenticated/cv'
 import { Route as AuthenticatedMisCvRouteImport } from './routes/_authenticated/mis-cv'
 import { Route as AuthenticatedPerfilRouteImport } from './routes/_authenticated/perfil'
 import { Route as AuthenticatedPostulacionesRouteImport } from './routes/_authenticated/postulaciones'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AuthenticatedPostulacionesIndexRouteImport } from './routes/_authenticated/postulaciones.index'
 import { Route as AuthenticatedPostulacionesIdRouteImport } from './routes/_authenticated/postulaciones.$id'
 import { Route as AuthenticatedPostulacionesNuevaRouteImport } from './routes/_authenticated/postulaciones.nueva'
@@ -55,6 +56,11 @@ const AuthenticatedPostulacionesRoute =
     path: '/postulaciones',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedPostulacionesIndexRoute =
   AuthenticatedPostulacionesIndexRouteImport.update({
     id: '/',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/mis-cv': typeof AuthenticatedMisCvRoute
   '/perfil': typeof AuthenticatedPerfilRoute
   '/postulaciones': typeof AuthenticatedPostulacionesRouteWithChildren
+  '/auth/callback': typeof AuthCallbackRoute
   '/postulaciones/$id': typeof AuthenticatedPostulacionesIdRoute
   '/postulaciones/nueva': typeof AuthenticatedPostulacionesNuevaRoute
   '/postulaciones/': typeof AuthenticatedPostulacionesIndexRoute
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/cv': typeof AuthenticatedCvRoute
   '/mis-cv': typeof AuthenticatedMisCvRoute
   '/perfil': typeof AuthenticatedPerfilRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/postulaciones/$id': typeof AuthenticatedPostulacionesIdRoute
   '/postulaciones/nueva': typeof AuthenticatedPostulacionesNuevaRoute
   '/postulaciones': typeof AuthenticatedPostulacionesIndexRoute
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/_authenticated/mis-cv': typeof AuthenticatedMisCvRoute
   '/_authenticated/perfil': typeof AuthenticatedPerfilRoute
   '/_authenticated/postulaciones': typeof AuthenticatedPostulacionesRouteWithChildren
+  '/auth/callback': typeof AuthCallbackRoute
   '/_authenticated/postulaciones/$id': typeof AuthenticatedPostulacionesIdRoute
   '/_authenticated/postulaciones/nueva': typeof AuthenticatedPostulacionesNuevaRoute
   '/_authenticated/postulaciones/': typeof AuthenticatedPostulacionesIndexRoute
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/mis-cv'
     | '/perfil'
     | '/postulaciones'
+    | '/auth/callback'
     | '/postulaciones/$id'
     | '/postulaciones/nueva'
     | '/postulaciones/'
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/cv'
     | '/mis-cv'
     | '/perfil'
+    | '/auth/callback'
     | '/postulaciones/$id'
     | '/postulaciones/nueva'
     | '/postulaciones'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/_authenticated/mis-cv'
     | '/_authenticated/perfil'
     | '/_authenticated/postulaciones'
+    | '/auth/callback'
     | '/_authenticated/postulaciones/$id'
     | '/_authenticated/postulaciones/nueva'
     | '/_authenticated/postulaciones/'
@@ -148,6 +160,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -200,6 +213,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/postulaciones'
       preLoaderRoute: typeof AuthenticatedPostulacionesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/postulaciones/': {
       id: '/_authenticated/postulaciones/'
@@ -264,6 +284,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   LoginRoute: LoginRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

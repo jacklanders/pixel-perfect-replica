@@ -27,7 +27,9 @@ export const getMyProfile = createServerFn({ method: "GET" }).handler(
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("user_id, nombre, email, telefono, ubicacion, rubro_objetivo, firma_mail, avatar_url, skills")
+      .select(
+        "user_id, nombre, email, telefono, ubicacion, rubro_objetivo, firma_mail, avatar_url, skills",
+      )
       .eq("user_id", userData.user.id)
       .maybeSingle();
 
@@ -59,10 +61,7 @@ export const updateMyProfile = createServerFn({ method: "POST" })
 
     // .eq("user_id", ...) es cinturón-y-tirantes: la policy de RLS ya lo exige,
     // pero dejarlo explícito documenta la intención en el propio query.
-    const { error } = await supabase
-      .from("profiles")
-      .update(data)
-      .eq("user_id", userData.user.id);
+    const { error } = await supabase.from("profiles").update(data).eq("user_id", userData.user.id);
 
     if (error) {
       console.error("[profile] error guardando perfil:", error.message);

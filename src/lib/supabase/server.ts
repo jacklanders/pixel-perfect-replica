@@ -10,10 +10,10 @@
 // página mantiene la sesión (eso confirma que las cookies se están seteando
 // bien en la respuesta, no solo leyendo).
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { getWebRequest, setCookie } from "@tanstack/react-start/server";
+import { getRequest, setCookie } from "@tanstack/react-start/server";
 
-const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] as string;
-const supabaseAnonKey = import.meta.env["VITE_SUPABASE_ANON_KEY"] as string;
+const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
+const supabaseAnonKey = import.meta.env["VITE_SUPABASE_ANON_KEY"] as string | undefined;
 
 function parseCookieHeader(header: string | null): { name: string; value: string }[] {
   if (!header) return [];
@@ -42,18 +42,26 @@ function parseCookieHeader(header: string | null): { name: string; value: string
  * cliente aparte con la service role key, nunca este.
  */
 export function getSupabaseServerClient() {
-  const request = getWebRequest();
+  const request = getRequest();
 
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return parseCookieHeader(request?.headers.get("cookie") ?? null);
-      },
-      setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-        for (const { name, value, options } of cookiesToSet) {
-          setCookie(name, value, options);
-        }
+  return createServerClient(
+    supabaseUrl ?? "https://placeholder.supabase.co",
+    supabaseAnonKey ?? "placeholder-anon-key",
+    {
+      cookies: {
+        getAll() {
+          return parseCookieHeader(request.headers.get("cookie"));
+        },
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+          for (const { name, value, options } of cookiesToSet) {
+            const safeOptions = {
+              ...options,
+              path: options.path ?? "/",
+            } as Parameters<typeof setCookie>[2];
+            setCookie(name, value, safeOptions);
+          }
+        },
       },
     },
-  });
+  );
 }
