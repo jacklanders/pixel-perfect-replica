@@ -44,13 +44,16 @@ function PerfilPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
+  const fetchPerfil = useServerFn(getMiPerfil);
+  const savePerfil = useServerFn(guardarPerfil);
+
   const { data, isPending, isError, error } = useQuery({
     queryKey: perfilQueryKey,
-    queryFn: () => getMiPerfil(),
+    queryFn: () => fetchPerfil(),
   });
 
   const mutation = useMutation({
-    mutationFn: guardarPerfil,
+    mutationFn: (perfil: Perfil) => savePerfil({ data: perfil }),
     onSuccess: (perfil) => {
       queryClient.setQueryData(perfilQueryKey, perfil);
       toast.success("Perfil guardado");
