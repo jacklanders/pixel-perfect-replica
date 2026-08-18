@@ -6,7 +6,7 @@ import type { ResumeRow } from "@/lib/supabase/types";
 
 export const getCvById = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }): Promise<Cv> => {
     const { data: fila, error } = await context.supabase
       .from("resumes")
@@ -48,7 +48,7 @@ export const listarCvs = createServerFn({ method: "GET" })
 
 export const crearCv = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z.object({ title: z.string().min(1).max(160).default("Mi CV") }).parse(input ?? {}),
   )
   .handler(async ({ data, context }): Promise<Cv> => {
@@ -75,7 +75,7 @@ export const crearCv = createServerFn({ method: "POST" })
 
 export const guardarCv = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => guardarCvSchema.parse(input))
+  .validator((input: unknown) => guardarCvSchema.parse(input))
   .handler(async ({ data, context }): Promise<Cv> => {
     const { data: actual, error: errorLectura } = await context.supabase
       .from("resumes")
@@ -105,7 +105,7 @@ export const guardarCv = createServerFn({ method: "POST" })
 
 export const duplicarCv = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }): Promise<Cv> => {
     const { data: original, error: errorLectura } = await context.supabase
       .from("resumes")
@@ -136,7 +136,7 @@ export const duplicarCv = createServerFn({ method: "POST" })
 
 export const borrarCv = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }): Promise<{ ok: true }> => {
     const { error } = await context.supabase
       .from("resumes")

@@ -1,169 +1,267 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
+import { Copy, FileText, Loader2, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Copy, Download, FileText, Plus, Clock, Check } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { type Cv } from "@/lib/cv.model";
+import { listarCvs, crearCv, duplicarCv, borrarCv } from "@/lib/cv.functions";
+import { PERFIL_VACIO } from "@/lib/perfil.model";
 
 export const Route = createFileRoute("/_authenticated/mis-cv")({
-  component: MisCv,
   head: () => ({
     meta: [
-      { title: "Mis CVs | Jack" },
-      {
-        name: "description",
-        content:
-          "Gestiona tus versiones de CV, duplica plantillas y exporta en PDF listo para postular.",
-      },
-      { property: "og:title", content: "Mis CVs | Jack" },
+      { title: "Mis CVs — Jack" },
+      { name: "description", content: "Versiones de tu CV. Duplicá, editá y exportá a PDF." },
+      { property: "og:title", content: "Mis CVs — Jack" },
       {
         property: "og:description",
-        content: "Gestiona tus versiones de CV y expórtalas en PDF con Jack.",
+        content: "Versiones de tu CV. Duplicá, editá y exportá a PDF.",
       },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
+  component: MisCvsPage,
 });
 
-const cvs = [
-  {
-    id: 1,
-    name: "CV general — Product Manager",
-    updated: "hace 2 horas",
-    score: 86,
-    target: "General",
-    primary: true,
-  },
-  {
-    id: 2,
-    name: "CV adaptado — Fintech Sr. PM",
-    updated: "ayer",
-    score: 74,
-    target: "Mercado Pago",
-    primary: false,
-  },
-  {
-    id: 3,
-    name: "CV en inglés — Remote PM",
-    updated: "hace 5 días",
-    score: 68,
-    target: "Remoto LatAm",
-    primary: false,
-  },
-];
+const misCvsQueryKey = ["mis-cvs"];
 
-const templates = [
-  { id: "clasica", name: "Clásica", note: "Sobria, ideal para corporativo" },
-  { id: "moderna", name: "Moderna", note: "Con acentos de color" },
-  { id: "ats", name: "ATS puro", note: "Sin columnas ni gráficos" },
-];
+const contenidoInicial = {
+  titular: "Resumen profesional",
+  perfil: "",
+  experiencia: [{ id: "1", puesto: "", empresa: "", detalle: "" }],
+};
 
-function MisCv() {
-  const [template, setTemplate] = useState("ats");
+function MisCvsPage() {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const fetchList = useServerFn(listarCvs);
+  const createCv = useServerFn(crearCv);
+  const duplicateCv = useServerFn(duplicarCv);
+  const deleteCv = useServerFn(borrarCv);
+
+  const {
+    data: cvs = [],
+    isPending,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: misCvsQueryKey,
+    queryFn: () => fetchList(),
+  });
+
+  const [borrando, setBorrando] = useState<string | null>(null);
+  const [confirmarId, setConfirmarId] = useState<string | null>(null);
+
+  const crearMutation = useMutation<Cv, Error, void>({
+    mutationFn: () => createCv({ data: { title: "Nuevo CV" } }),
+    onSuccess: (cv) => {
+      queryClient.invalidateQueries({ queryKey: misCvsQueryKey });
+      toast.success("Nuevo CV creado");
+      navigate({ to: "/cv", search: { id: cv.id } });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo crear el CV"),
+  });
+
+  const duplicarMutation = useMutation<Cv, Error, string>({
+    mutationFn: (id) => duplicateCv({ data: { id } }),
+    onSuccess: (cv) => {
+      queryClient.invalidateQueries({ queryKey: misCvsQueryKey });
+      toast.success("CV duplicado");
+      navigate({ to: "/cv", search: { id: cv.id } });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo duplicar"),
+  });
+
+  const eliminarMutation = useMutation({
+    mutationFn: (id: string) => deleteCv({ data: { id } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: misCvsQueryKey });
+      setBorrando(null);
+      setConfirmarId(null);
+      toast.success("CV eliminado");
+    },
+    onError: (err) => {
+      setBorrando(null);
+      toast.error(err instanceof Error ? err.message : "No se pudo eliminar");
+    },
+  });
+
+  if (isPending) {
+    return (
+      <AppShell title="Mis CVs" subtitle="Cargando tus versiones guardadas…">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (isError) {
+    return (
+      <AppShell title="Mis CVs" subtitle="No se pudieron cargar los CVs.">
+        <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-soft">
+          <p className="text-sm text-destructive">{error?.message ?? "Error"}</p>
+          <Button
+            className="mt-4"
+            onClick={() => queryClient.invalidateQueries({ queryKey: misCvsQueryKey })}
+          >
+            Reintentar
+          </Button>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell
       title="Mis CVs"
-      subtitle="Guarda distintas versiones y exporta la que necesites para cada postulación."
+      subtitle="Versiones guardadas. Tu versión principal es la que se adjunta por defecto."
     >
-      <div className="mb-6 flex flex-wrap gap-3">
-        <Button asChild>
-          <Link to="/cv">
-            <Plus className="size-4" /> Nuevo CV
-          </Link>
+      <div className="mb-6 flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {cvs.length} versión{cvs.length === 1 ? "" : "es"} guardada
+        </p>
+        <Button onClick={() => crearMutation.mutate()} disabled={crearMutation.isPending}>
+          {crearMutation.isPending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Plus className="size-4" />
+          )}
+          Nuevo CV
         </Button>
       </div>
 
-      <div className="grid gap-4">
-        {cvs.map((cv) => (
-          <article
-            key={cv.id}
-            className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-card p-4 shadow-soft"
+      {cvs.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
+          <FileText className="mx-auto size-10 text-muted-foreground" />
+          <p className="mt-4 font-medium">Aún no tenés CVs guardados</p>
+          <p className="text-sm text-muted-foreground">
+            Creá tu primera versión para empezar a postularte.
+          </p>
+          <Button
+            className="mt-6"
+            onClick={() => crearMutation.mutate()}
+            disabled={crearMutation.isPending}
           >
-            <div className="flex size-11 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
-              <FileText className="size-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="truncate font-medium">{cv.name}</h2>
-                {cv.primary ? <Badge>Principal</Badge> : null}
-                <Badge variant="secondary">{cv.target}</Badge>
-              </div>
-              <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Clock className="size-3.5" /> Actualizado {cv.updated} · Puntaje IA {cv.score}/100
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="ghost" size="sm">
-                <Copy className="size-4" /> Duplicar
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/postulaciones/nueva">Usar en postulación</Link>
-              </Button>
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/cv">Editar</Link>
-              </Button>
-              <ExportDialog template={template} setTemplate={setTemplate} />
-            </div>
-          </article>
-        ))}
-      </div>
+            Crear mi primer CV
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {cvs.map((cv) => (
+            <CvCard
+              key={cv.id}
+              cv={cv}
+              onDuplicar={() => duplicarMutation.mutate(cv.id)}
+              duplicando={duplicarMutation.isPending && duplicarMutation.variables === cv.id}
+              onEliminar={() => setConfirmarId(cv.id)}
+              eliminando={borrando === cv.id}
+            />
+          ))}
+        </div>
+      )}
+
+      <Dialog open={!!confirmarId} onOpenChange={() => setConfirmarId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Eliminar CV?</DialogTitle>
+            <DialogDescription>Esta acción no se puede deshacer.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmarId(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (confirmarId) {
+                  setBorrando(confirmarId);
+                  eliminarMutation.mutate(confirmarId);
+                }
+              }}
+            >
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
 
-function ExportDialog({
-  template,
-  setTemplate,
+function CvCard({
+  cv,
+  onDuplicar,
+  duplicando,
+  onEliminar,
+  eliminando,
 }: {
-  template: string;
-  setTemplate: (v: string) => void;
+  cv: Cv;
+  onDuplicar: () => void;
+  duplicando: boolean;
+  onEliminar: () => void;
+  eliminando: boolean;
 }) {
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button size="sm">
-          <Download className="size-4" /> Exportar
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Exportar CV en PDF</DialogTitle>
-          <DialogDescription>
-            Elegí una plantilla. Todas son compatibles con lectores automáticos (ATS).
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-2">
-          {templates.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTemplate(t.id)}
-              className={`flex items-center justify-between rounded-lg border p-3 text-left transition-colors ${
-                template === t.id ? "border-primary bg-secondary" : "border-border hover:bg-muted"
-              }`}
-            >
-              <span>
-                <span className="block text-sm font-medium">{t.name}</span>
-                <span className="block text-xs text-muted-foreground">{t.note}</span>
-              </span>
-              {template === t.id ? <Check className="size-4 text-primary" /> : null}
-            </button>
-          ))}
+    <Card className="group relative flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-soft transition-shadow hover:shadow-md">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-2">
+          <FileText className="size-5 text-primary" />
+          <h3 className="font-display font-bold">{cv.title}</h3>
         </div>
-        <Button className="mt-2 w-full">
-          <Download className="size-4" /> Descargar PDF
+        {cv.isPrimary ? <Badge variant="default">Principal</Badge> : null}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {cv.version ? `v${cv.version}` : "v1"} · Actualizado recientemente
+      </p>
+      <div className="mt-auto flex items-center gap-2">
+        <Button variant="outline" size="sm" className="flex-1" asChild>
+          <Link to="/cv" search={{ id: cv.id }}>
+            <Pencil className="mr-1 size-3.5" /> Editar
+          </Link>
         </Button>
-      </DialogContent>
-    </Dialog>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-8">
+              <MoreVertical className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onDuplicar} disabled={duplicando || eliminando}>
+              <Copy className="mr-2 size-4" /> Duplicar
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={onEliminar}
+              disabled={duplicando || eliminando}
+              className="text-destructive"
+            >
+              <Trash2 className="mr-2 size-4" /> Eliminar
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </Card>
   );
 }
