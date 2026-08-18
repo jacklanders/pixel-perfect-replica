@@ -39,10 +39,10 @@ const contenidoInicial = {
 function MisCvsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const fetchList = useServerFn(listarMisCvs);
+  const fetchList = useServerFn(listarCvs);
   const createCv = useServerFn(crearCv);
   const duplicateCv = useServerFn(duplicarCv);
-  const deleteCv = useServerFn(eliminarCv);
+  const deleteCv = useServerFn(borrarCv);
 
   const { data: cvs = [], isPending, isError, error } = useQuery({
     queryKey: misCvsQueryKey,
@@ -52,8 +52,8 @@ function MisCvsPage() {
   const [borrando, setBorrando] = useState<string | null>(null);
   const [confirmarId, setConfirmarId] = useState<string | null>(null);
 
-  const crearMutation = useMutation({
-    mutationFn: () => createCv({ data: { title: "Nuevo CV", contenido: contenidoInicial } }),
+  const crearMutation = useMutation<Cv, Error, void>({
+    mutationFn: () => createCv({ data: { title: "Nuevo CV" } }),
     onSuccess: (cv) => {
       queryClient.invalidateQueries({ queryKey: misCvsQueryKey });
       toast.success("Nuevo CV creado");
@@ -62,8 +62,8 @@ function MisCvsPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo crear el CV"),
   });
 
-  const duplicarMutation = useMutation({
-    mutationFn: (id: string) => duplicateCv({ data: { id } }),
+  const duplicarMutation = useMutation<Cv, Error, string>({
+    mutationFn: (id) => duplicateCv({ data: { id } }),
     onSuccess: (cv) => {
       queryClient.invalidateQueries({ queryKey: misCvsQueryKey });
       toast.success("CV duplicado");
