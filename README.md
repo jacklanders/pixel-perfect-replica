@@ -75,3 +75,9 @@ bun run build
 Cloudflare Workers vía Nitro (preset que ya trae el scaffold de Lovable) — no Netlify, que asumía el
 prompt de producto original antes de ver el stack real. Pasos exactos de deploy (dominio, secrets de
 Cloudflare, etc.) se documentan acá en Hito 5.
+
+
+
+
+
+
