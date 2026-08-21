@@ -9,7 +9,7 @@ export const getMiPerfil = createServerFn({ method: "GET" })
     const supabase = context.supabase;
     const userId = context.userId;
 
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .eq("user_id", userId)
@@ -54,14 +54,16 @@ export const getMiPerfil = createServerFn({ method: "GET" })
     return data as Perfil;
   });
 
-const guardarPerfilSchema = z.object({
-  nombre: z.string().optional(),
-  telefono: z.string().optional(),
-  ubicacion: z.string().optional(),
-  rubroObjetivo: z.string().optional(),
-  firmaMail: z.string().optional(),
-  preferencias: z.record(z.unknown()).optional(),
-}).partial();
+const guardarPerfilSchema = z
+  .object({
+    nombre: z.string().optional(),
+    telefono: z.string().optional(),
+    ubicacion: z.string().optional(),
+    rubroObjetivo: z.string().optional(),
+    firmaMail: z.string().optional(),
+    preferencias: z.record(z.unknown()).optional(),
+  })
+  .partial();
 
 export const guardarPerfil = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
