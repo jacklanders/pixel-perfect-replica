@@ -1,63 +1,88 @@
 import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
 import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
-import { perfilSchema, type Perfil, filaAPerfil } from "@/lib/perfil.model";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+import type { Perfil } from "@/lib/perfil.model";
 
 export const getMiPerfil = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<Perfil> => {
-    const { supabase, userId, email, userMetadata } = context;
+  .handler(async ({ context }) => {
+    const supabase = getSupabaseServerClient();
+    const user = context.user;
 
+    // Intentar obtener el perfil existente
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (error) throw new Error(error.message);
-    if (data) return filaAPerfil(data);
-
-    // Alta automática en el primer login, con nombre y mail de Google.
-    const nombre =
-      (userMetadata["full_name"] as string | undefined) ??
-      (userMetadata["name"] as string | undefined) ??
-      null;
-
-    const { data: creado, error: errorAlta } = await supabase
-      .from("profiles")
-      .insert({ user_id: userId, email, nombre })
-      .select("*")
+      .eq("user_id", user.id)
       .single();
 
-    if (errorAlta) throw new Error(errorAlta.message);
-    return filaAPerfil(creado);
+    // Si no existe (PGRST116 = no rows), crearlo automáticamente
+    if (!data || error?.code === "PGRST116") {
+      console.log("[perfil] Perfil no encontrado, creando automáticamente para:", user.email);
+
+      const newProfile = {
+        user_id: user.id,
+        nombre:
+          (user as Record<string, unknown>).user_metadata?.full_name ||
+          (user as Record<string, unknown>).user_metadata?.name ||
+          user.email?.split("@")[0] ||
+          "",
+        email: user.email || "",
+        telefono: "",
+        ubicacion: "",
+        rubro_objetivo: "",
+        firma_mail: "",
+        preferencias: {},
+      };
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("profiles")
+        .insert(newProfile)
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("[perfil] Error al crear perfil:", insertError.message);
+        return null;
+      }
+
+      return inserted as Perfil;
+    }
+
+    if (error) {
+      console.error("[perfil] Error al obtener perfil:", error.message);
+      return null;
+    }
+
+    return data as Perfil;
   });
 
 export const guardarPerfil = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: unknown) => perfilSchema.parse(input))
-  .handler(async ({ data, context }): Promise<Perfil> => {
-    const { supabase, userId, email } = context;
+  .handler(
+    async ({ context, data }: { context: { user: { id: string } }; data: Partial<Perfil> }) => {
+      const supabase = getSupabaseServerClient();
 
-    const { data: guardado, error } = await supabase
-      .from("profiles")
-      .upsert(
-        {
-          user_id: userId,
-          email,
-          nombre: data.nombre || null,
-          telefono: data.telefono || null,
-          ubicacion: data.ubicacion || null,
-          rubro_objetivo: data.rubroObjetivo || null,
-          firma_mail: data.firmaMail || null,
-          preferencias: { resumen: data.resumen, skills: data.skills },
+      const { data: updated, error } = await supabase
+        .from("profiles")
+        .update({
+          nombre: data.nombre,
+          telefono: data.telefono,
+          ubicacion: data.ubicacion,
+          rubro_objetivo: data.rubro_objetivo,
+          firma_mail: data.firma_mail,
+          preferencias: data.preferencias,
           updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" },
-      )
-      .select("*")
-      .single();
+        })
+        .eq("user_id", context.user.id)
+        .select()
+        .single();
 
-    if (error) throw new Error(error.message);
-    return filaAPerfil(guardado);
-  });
+      if (error) {
+        console.error("[perfil] Error al guardar perfil:", error.message);
+        throw new Error("No se pudo guardar el perfil");
+      }
+
+      return updated as Perfil;
+    },
+  );

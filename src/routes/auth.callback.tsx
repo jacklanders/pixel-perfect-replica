@@ -1,38 +1,56 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
-
-const exchangeCodeSchema = z.object({ code: z.string().min(1) });
-
-export const exchangeCodeForSession = createServerFn({ method: "POST" })
-  .validator(exchangeCodeSchema)
-  .handler(async ({ data }) => {
-    const supabase = getSupabaseServerClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(data.code);
-    return { ok: !error, message: error?.message };
-  });
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 
 export const Route = createFileRoute("/auth/callback")({
-  // Corre server-side en el primer request (justo lo que necesitamos: el
-  // exchange de code por sesión tiene que pasar por el servidor para poder
-  // setear las cookies de sesión en la respuesta).
-  beforeLoad: async ({ search }) => {
-    const rawCode = (search as Record<string, unknown>)["code"];
-    const code = typeof rawCode === "string" ? rawCode : undefined;
+  component: AuthCallback,
+});
+
+function AuthCallback() {
+  const navigate = useNavigate();
+  const [status, setStatus] = useState("Procesando login…");
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("code");
+    const error = url.searchParams.get("error");
+
+    if (error) {
+      console.error("[auth] OAuth error:", error);
+      navigate({ to: "/login", search: { error: "auth_fallo" } });
+      return;
+    }
 
     if (!code) {
-      throw redirect({ to: "/login", search: { error: "sin_code" } });
+      navigate({ to: "/login", search: { error: "sin_code" } });
+      return;
     }
 
-    const result = await exchangeCodeForSession({ data: { code } });
+    supabase.auth.exchangeCodeForSession(code).then(({ error: exchangeError }) => {
+      if (exchangeError) {
+        console.error("[auth] Exchange failed:", exchangeError.message);
+        setStatus("Error al procesar el login. Redirigiendo…");
+        setTimeout(() => {
+          navigate({ to: "/login", search: { error: "auth_fallo" } });
+        }, 2000);
+      } else {
+        setStatus("¡Listo! Redirigiendo…");
+        setTimeout(() => {
+          navigate({ to: "/perfil" });
+        }, 500);
+      }
+    });
+  }, [navigate]);
 
-    if (!result.ok) {
-      console.error("[auth] Google OAuth code exchange failed:", result.message);
-      throw redirect({ to: "/login", search: { error: "auth_fallo" } });
-    }
-
-    throw redirect({ to: "/perfil" });
-  },
-  component: () => null,
-});
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+          <span className="text-xl font-bold text-primary">J</span>
+        </div>
+        <h1 className="text-xl font-semibold mb-2">Jack</h1>
+        <p className="text-muted-foreground text-sm">{status}</p>
+      </div>
+    </div>
+  );
+}

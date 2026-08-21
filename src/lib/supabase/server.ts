@@ -1,19 +1,50 @@
-// PENDIENTE DE VERIFICAR EN LOCAL: este archivo es la pieza más riesgosa del
-// Hito 1. No se pudo correr `bun run dev` + un login real de Google en el
-// sandbox donde se armó este patch (sin bun, sin credenciales de Google, sin
-// proyecto Supabase real). El patrón de abajo (getAll/setAll de cookies vía
-// @supabase/ssr, usando getWebRequest/setCookie de @tanstack/react-start/server)
-// es el documentado por Supabase para frameworks SSR "custom", pero los nombres
-// exactos exportados pueden variar entre versiones de @tanstack/react-start.
-// Antes de confiar en esto: `bun run dev`, ir a /login, tocar "Continuar con
-// Google", confirmar que vuelve autenticado a /perfil y que un refresh de
-// página mantiene la sesión (eso confirma que las cookies se están seteando
-// bien en la respuesta, no solo leyendo).
+// src/lib/supabase/server.ts
+// Cliente de Supabase para el SERVIDOR (SSR y server functions)
+
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
 
-const supabaseUrl = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
-const supabaseAnonKey = import.meta.env["VITE_SUPABASE_ANON_KEY"] as string | undefined;
+// DEBUG: Vamos a probar TODAS las formas de leer variables de entorno
+// y ver cuál funciona en tu máquina
+function getEnvVar(name: string): string | undefined {
+  // Forma 1: process.env (Node.js)
+  if (typeof process !== "undefined" && process.env && name in process.env) {
+    const val = process.env[name];
+    if (val) return val;
+  }
+
+  // Forma 2: import.meta.env (Vite)
+  try {
+    const viteEnv = (import.meta as unknown as { env?: Record<string, string> }).env;
+    if (viteEnv && name in viteEnv) {
+      const val = viteEnv[name];
+      if (val) return val;
+    }
+  } catch {
+    // import.meta.env no disponible
+  }
+
+  return undefined;
+}
+
+// DEBUG: Log para ver qué estamos leyendo (sin mostrar la key completa por seguridad)
+const supabaseUrl = getEnvVar("VITE_SUPABASE_URL")?.trim();
+const supabaseAnonKey = getEnvVar("VITE_SUPABASE_ANON_KEY")?.trim();
+
+if (supabaseUrl) {
+  console.log("[DEBUG] Supabase URL leída:", supabaseUrl);
+} else {
+  console.error("[DEBUG] ERROR: No se pudo leer VITE_SUPABASE_URL");
+}
+
+if (supabaseAnonKey) {
+  console.log(
+    "[DEBUG] Supabase Key leída (primeros 20 chars):",
+    supabaseAnonKey.substring(0, 20) + "...",
+  );
+} else {
+  console.error("[DEBUG] ERROR: No se pudo leer VITE_SUPABASE_ANON_KEY");
+}
 
 function parseCookieHeader(header: string | null): { name: string; value: string }[] {
   if (!header) return [];
@@ -29,39 +60,31 @@ function parseCookieHeader(header: string | null): { name: string; value: string
     });
 }
 
-/**
- * Cliente de Supabase para usar SOLO dentro de server functions
- * (`createServerFn`) o loaders/beforeLoad que corren en el servidor. Lee la
- * sesión de las cookies del request entrante y, si Supabase refresca el
- * token, reescribe esas cookies en la respuesta — así el usuario no se
- * desloguea solo porque el access token expiró a mitad de sesión.
- *
- * Corre como el usuario autenticado (rol `authenticated` de Postgres), NO como
- * service_role: todo lo que se consulte acá respeta RLS. Para lo que sí
- * necesita bypassear RLS (ej. leer oauth_connections en Hito 4) usar un
- * cliente aparte con la service role key, nunca este.
- */
 export function getSupabaseServerClient() {
   const request = getRequest();
 
-  return createServerClient(
-    supabaseUrl ?? "https://placeholder.supabase.co",
-    supabaseAnonKey ?? "placeholder-anon-key",
-    {
-      cookies: {
-        getAll() {
-          return parseCookieHeader(request.headers.get("cookie"));
-        },
-        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-          for (const { name, value, options } of cookiesToSet) {
-            const safeOptions = {
-              ...options,
-              path: options.path ?? "/",
-            } as Parameters<typeof setCookie>[2];
-            setCookie(name, value, safeOptions);
-          }
-        },
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      "Faltan VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY. " +
+        "Verificá que el archivo .env.local esté en la raíz del proyecto, " +
+        "que tenga las variables correctas, y que hayas reiniciado el servidor con Ctrl+C y luego bun run dev.",
+    );
+  }
+
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return parseCookieHeader(request.headers.get("cookie"));
+      },
+      setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+        for (const { name, value, options } of cookiesToSet) {
+          const safeOptions = {
+            ...options,
+            path: options.path ?? "/",
+          } as Parameters<typeof setCookie>[2];
+          setCookie(name, value, safeOptions);
+        }
       },
     },
-  );
+  });
 }
