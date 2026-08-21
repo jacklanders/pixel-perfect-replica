@@ -31,19 +31,23 @@ function getEnvVar(name: string): string | undefined {
 const supabaseUrl = getEnvVar("VITE_SUPABASE_URL")?.trim();
 const supabaseAnonKey = getEnvVar("VITE_SUPABASE_ANON_KEY")?.trim();
 
-if (supabaseUrl) {
-  console.log("[DEBUG] Supabase URL leída:", supabaseUrl);
-} else {
-  console.error("[DEBUG] ERROR: No se pudo leer VITE_SUPABASE_URL");
-}
+const isDev =
+  typeof process !== "undefined" && process.env && process.env["NODE_ENV"] !== "production";
+if (isDev) {
+  if (supabaseUrl) {
+    console.log("[DEBUG] Supabase URL leída:", supabaseUrl);
+  } else {
+    console.error("[DEBUG] ERROR: No se pudo leer VITE_SUPABASE_URL");
+  }
 
-if (supabaseAnonKey) {
-  console.log(
-    "[DEBUG] Supabase Key leída (primeros 20 chars):",
-    supabaseAnonKey.substring(0, 20) + "...",
-  );
-} else {
-  console.error("[DEBUG] ERROR: No se pudo leer VITE_SUPABASE_ANON_KEY");
+  if (supabaseAnonKey) {
+    console.log(
+      "[DEBUG] Supabase Key leída (primeros 20 chars):",
+      supabaseAnonKey.substring(0, 20) + "...",
+    );
+  } else {
+    console.error("[DEBUG] ERROR: No se pudo leer VITE_SUPABASE_ANON_KEY");
+  }
 }
 
 function parseCookieHeader(header: string | null): { name: string; value: string }[] {

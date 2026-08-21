@@ -39,8 +39,7 @@ export const getMiPerfil = createServerFn({ method: "GET" })
         .single();
 
       if (insertError) {
-        console.error("[perfil] Error al crear perfil:", insertError.message);
-        return null;
+        throw new Error(`No se pudo crear el perfil: ${insertError.message}`);
       }
 
       return inserted as Perfil;

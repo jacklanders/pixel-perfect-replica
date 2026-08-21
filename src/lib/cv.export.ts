@@ -14,8 +14,8 @@ function formatDate(iso: string): string {
 
 export async function descargarPdf(cv: Cv, perfil: Perfil | null, nombre: string) {
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([595.28, 841.89]); // A4
-  const { width, height } = page.getSize();
+  let page = pdfDoc.addPage([595.28, 841.89]); // A4
+  let { width, height } = page.getSize();
   const margin = 50;
   let y = height - margin;
 
@@ -69,7 +69,20 @@ export async function descargarPdf(cv: Cv, perfil: Perfil | null, nombre: string
     detalleLines.forEach((line) => drawText("  " + line, 10));
     y -= 6;
   });
-
+  // Skills
+  if (perfil?.skills?.length) {
+    if (y < 100) {
+      page = pdfDoc.addPage([595.28, 841.89]);
+      ({ width, height } = page.getSize());
+      y = height - margin;
+    }
+    drawText("HABILIDADES", 11, true, rgb(0.2, 0.2, 0.2));
+    const skillsText = perfil.skills.join(" · ");
+    const skillLines = splitLines(skillsText, 85);
+    skillLines.forEach((line) => drawText(line, 10));
+    y -= 8;
+    drawLine();
+  }
   // Footer
   y = 40;
   page.drawText(`Generado por Jack · ${formatDate(new Date().toISOString())}`, {
@@ -152,7 +165,19 @@ export async function descargarDocx(cv: Cv, perfil: Perfil | null, nombre: strin
       }),
     );
   });
-
+  if (perfil?.skills?.length) {
+    children.push(
+      new Paragraph({
+        text: "HABILIDADES",
+        heading: HeadingLevel.HEADING_2,
+        spacing: { before: 200, after: 120 },
+      }),
+      new Paragraph({
+        children: [new TextRun({ text: perfil.skills.join(" · ") })],
+        spacing: { after: 200 },
+      }),
+    );
+  }
   const doc = new Document({
     sections: [
       {
