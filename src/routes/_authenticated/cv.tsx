@@ -2,7 +2,16 @@ import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-r
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { useEffect, useState } from "react";
-import { Bot, Download, Loader2, MessageSquare, Save, Sparkles } from "lucide-react";
+import {
+  Bot,
+  Download,
+  Loader2,
+  MessageSquare,
+  Save,
+  Sparkles,
+  FilePlus,
+  FileText,
+} from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -16,14 +25,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 
 import { type Cv } from "@/lib/cv.model";
-import { getCvPrimario, getCvById, guardarCv } from "@/lib/cv.functions";
+import { getCvPrimario, getCvById, guardarCv, crearCv } from "@/lib/cv.functions";
 import { getMiPerfil } from "@/lib/perfil.functions";
 import { useAuth } from "@/hooks/useAuth";
 import { iniciales, nombreVisible } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/_authenticated/cv")({
   validateSearch: (search: Record<string, unknown>) =>
-    z.object({ id: z.string().uuid().optional() }).parse(search),
+    z.object({ id: z.string().optional() }).parse(search),
   head: () => ({
     meta: [
       { title: "Editor de CV — Jack" },
@@ -49,7 +58,10 @@ const sugerenciasMock = [
 ];
 
 function CvEditorPage() {
-  const { id } = useSearch({ from: "/_authenticated/cv" });
+  const search = useSearch({ from: "/_authenticated/cv" });
+  const rawId = search.id;
+  const id = rawId && rawId.trim() !== "" ? rawId : undefined;
+
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -58,6 +70,7 @@ function CvEditorPage() {
   const fetchCv = useServerFn(getCvById);
   const fetchPrimary = useServerFn(getCvPrimario);
   const saveCv = useServerFn(guardarCv);
+  const createCvFn = useServerFn(crearCv);
 
   const { data: perfil, isPending: perfilPending } = useQuery({
     queryKey: perfilQueryKey,
@@ -75,28 +88,49 @@ function CvEditorPage() {
       if (id) return fetchCv({ data: { id } });
       const primario = await fetchPrimary();
       if (primario) return primario;
-      // Si no hay principal, se crea automáticamente un CV en blanco.
-      // Esto se hace en el cliente para evitar complicar la server fn; en producción
-      // se puede mejorar con una transacción server-side.
-      return saveCv({
-        data: {
-          id: "nuevo",
-          title: "Mi CV principal",
-          contenido: {
-            titular: perfil?.rubroObjetivo ? perfil.rubroObjetivo : "Resumen profesional",
-            perfil: perfil?.resumen ?? "",
-            experiencia: [{ id: "1", puesto: "", empresa: "", detalle: "" }],
-          },
-        },
-      });
+      return null;
     },
   });
 
   const [form, setForm] = useState<Cv | null>(null);
+  const [creando, setCreando] = useState(false);
 
   useEffect(() => {
     if (cv) setForm(cv);
   }, [cv]);
+
+  const crearCvNuevo = async () => {
+    if (!perfil) return;
+    setCreando(true);
+    try {
+      const nuevoCv = await createCvFn({ data: { title: "Mi CV principal" } });
+      if (nuevoCv) {
+        const cvConContenido: Cv = {
+          ...nuevoCv,
+          contenido: {
+            titular: perfil?.rubroObjetivo ? perfil.rubroObjetivo : "Resumen profesional",
+            perfil: "",
+            experiencia: [{ id: crypto.randomUUID(), puesto: "", empresa: "", detalle: "" }],
+          },
+        };
+        await saveCv({
+          data: {
+            id: cvConContenido.id,
+            title: cvConContenido.title,
+            contenido: cvConContenido.contenido,
+          },
+        });
+        queryClient.setQueryData(cvQueryKey(nuevoCv.id), cvConContenido);
+        queryClient.invalidateQueries({ queryKey: misCvsQueryKey });
+        toast.success("CV creado");
+        navigate({ to: "/cv", search: { id: nuevoCv.id } });
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo crear el CV");
+    } finally {
+      setCreando(false);
+    }
+  };
 
   const mutation = useMutation({
     mutationFn: (cv: Cv) =>
@@ -138,7 +172,7 @@ function CvEditorPage() {
     );
   }
 
-  if (isError || !form) {
+  if (isError) {
     return (
       <AppShell title="Editor de CV" subtitle="No se pudo cargar el CV.">
         <div className="rounded-2xl border border-border bg-card p-6 text-center shadow-soft">
@@ -156,6 +190,43 @@ function CvEditorPage() {
             </Button>
           </div>
         </div>
+      </AppShell>
+    );
+  }
+
+  if (!cv) {
+    return (
+      <AppShell title="Editor de CV" subtitle="No tenés un CV todavía.">
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+          <div className="bg-primary/10 flex size-16 items-center justify-center rounded-full">
+            <FilePlus className="size-8 text-primary" />
+          </div>
+          <h2 className="text-xl font-semibold">Creá tu primer CV</h2>
+          <p className="text-muted-foreground text-center max-w-md">
+            Jack te va a ayudar a armarlo, mejorarlo y descargarlo en PDF o Word.
+          </p>
+          <div className="flex gap-3">
+            <Button onClick={crearCvNuevo} disabled={creando} className="gap-2">
+              {creando ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <FilePlus className="size-4" />
+              )}
+              Crear CV nuevo
+            </Button>
+            <Button variant="ghost" asChild>
+              <Link to="/mis-cv">Ver mis CVs</Link>
+            </Button>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (!form) {
+    return (
+      <AppShell title="Editor de CV" subtitle="Cargando…">
+        <CvSkeleton />
       </AppShell>
     );
   }
@@ -431,9 +502,34 @@ function CvEditorPage() {
             </Button>
           </div>
 
-          <Button variant="outline" className="mt-4 w-full" type="button" disabled>
-            <Download className="mr-2 size-4" /> Exportar PDF
-          </Button>
+          <div className="mt-4 flex flex-col gap-2">
+            <Button
+              variant="outline"
+              className="w-full"
+              type="button"
+              onClick={() => {
+                if (!form) return;
+                import("@/lib/cv.export").then(({ descargarPdf }) => {
+                  descargarPdf(form, perfil ?? null, name || "");
+                });
+              }}
+            >
+              <Download className="mr-2 size-4" /> Exportar PDF
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              type="button"
+              onClick={() => {
+                if (!form) return;
+                import("@/lib/cv.export").then(({ descargarDocx }) => {
+                  descargarDocx(form, perfil ?? null, name || "");
+                });
+              }}
+            >
+              <FileText className="mr-2 size-4" /> Exportar DOCX
+            </Button>
+          </div>
         </aside>
       </div>
     </AppShell>

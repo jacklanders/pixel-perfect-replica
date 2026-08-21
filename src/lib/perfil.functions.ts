@@ -1,33 +1,30 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Perfil } from "@/lib/perfil.model";
 
 export const getMiPerfil = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const supabase = getSupabaseServerClient();
-    const user = context.user;
+    const supabase = context.supabase;
+    const userId = context.userId;
 
-    // Intentar obtener el perfil existente
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("profiles")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .single();
 
-    // Si no existe (PGRST116 = no rows), crearlo automáticamente
     if (!data || error?.code === "PGRST116") {
-      console.log("[perfil] Perfil no encontrado, creando automáticamente para:", user.email);
-
+      const meta = context.userMetadata as Record<string, unknown> | undefined;
       const newProfile = {
-        user_id: user.id,
+        user_id: userId,
         nombre:
-          (user as Record<string, unknown>).user_metadata?.full_name ||
-          (user as Record<string, unknown>).user_metadata?.name ||
-          user.email?.split("@")[0] ||
+          (meta?.["full_name"] as string) ||
+          (meta?.["name"] as string) ||
+          context.email?.split("@")[0] ||
           "",
-        email: user.email || "",
+        email: context.email || "",
         telefono: "",
         ubicacion: "",
         rubro_objetivo: "",
@@ -57,32 +54,36 @@ export const getMiPerfil = createServerFn({ method: "GET" })
     return data as Perfil;
   });
 
+const guardarPerfilSchema = z.object({
+  nombre: z.string().optional(),
+  telefono: z.string().optional(),
+  ubicacion: z.string().optional(),
+  rubroObjetivo: z.string().optional(),
+  firmaMail: z.string().optional(),
+  preferencias: z.record(z.unknown()).optional(),
+}).partial();
+
 export const guardarPerfil = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(
-    async ({ context, data }: { context: { user: { id: string } }; data: Partial<Perfil> }) => {
-      const supabase = getSupabaseServerClient();
+  .validator((input: unknown) => guardarPerfilSchema.parse(input))
+  .handler(async ({ context, data }) => {
+    const supabase = context.supabase;
 
-      const { data: updated, error } = await supabase
-        .from("profiles")
-        .update({
-          nombre: data.nombre,
-          telefono: data.telefono,
-          ubicacion: data.ubicacion,
-          rubro_objetivo: data.rubro_objetivo,
-          firma_mail: data.firma_mail,
-          preferencias: data.preferencias,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", context.user.id)
-        .select()
-        .single();
+    const updateData: Record<string, unknown> = {};
+    if (data.nombre !== undefined) updateData["nombre"] = data.nombre;
+    if (data.telefono !== undefined) updateData["telefono"] = data.telefono;
+    if (data.ubicacion !== undefined) updateData["ubicacion"] = data.ubicacion;
+    if (data.rubroObjetivo !== undefined) updateData["rubro_objetivo"] = data.rubroObjetivo;
+    if (data.firmaMail !== undefined) updateData["firma_mail"] = data.firmaMail;
+    if (data.preferencias !== undefined) updateData["preferencias"] = data.preferencias;
 
-      if (error) {
-        console.error("[perfil] Error al guardar perfil:", error.message);
-        throw new Error("No se pudo guardar el perfil");
-      }
+    const { data: updated, error } = await supabase
+      .from("profiles")
+      .update(updateData)
+      .eq("user_id", context.userId)
+      .select()
+      .single();
 
-      return updated as Perfil;
-    },
-  );
+    if (error) throw new Error(error.message);
+    return updated as Perfil;
+  });

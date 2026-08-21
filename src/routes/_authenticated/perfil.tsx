@@ -53,7 +53,7 @@ function PerfilPage() {
   });
 
   const mutation = useMutation({
-    mutationFn: (perfil: Perfil) => savePerfil({ data: perfil }),
+    mutationFn: (perfil: Perfil) => savePerfil({ data: perfil as Partial<Perfil> }),
     onSuccess: (perfil) => {
       queryClient.setQueryData(perfilQueryKey, perfil);
       toast.success("Perfil guardado");
