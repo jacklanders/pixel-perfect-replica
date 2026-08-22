@@ -147,3 +147,75 @@ export const borrarCv = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+export const crearCvDesdeUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        title: z.string().min(1).max(160).default("CV subido"),
+        extractedText: z.string().max(50000).default(""),
+        sourceType: z.enum(["uploaded_pdf", "uploaded_docx"]),
+        fileName: z.string().min(1).max(255),
+        fileBase64: z.string().min(1),
+        mimeType: z.string().min(1),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }): Promise<Cv> => {
+    // 1. Crear CV en DB
+    const { data: creado, error: errorInsert } = await context.supabase
+      .from("resumes")
+      .insert({
+        user_id: context.userId,
+        title: data.title,
+        source_type: data.sourceType,
+        structured_json: { titular: "", perfil: "", experiencia: [] },
+        extracted_text: data.extractedText,
+      })
+      .select("*")
+      .single();
+
+    if (errorInsert) throw new Error(errorInsert.message);
+    const fila = creado as ResumeRow;
+
+    // 2. Subir archivo a Storage
+    const filePath = `${context.userId}/${fila.id}/${data.fileName}`;
+    const fileUint8 = base64ToUint8Array(data.fileBase64);
+
+    const { error: errorUpload } = await context.supabase.storage
+      .from("resumes")
+      .upload(filePath, fileUint8, {
+        contentType: data.mimeType,
+        upsert: false,
+      });
+
+    if (errorUpload) {
+      // Rollback: borrar el CV creado
+      await context.supabase.from("resumes").delete().eq("id", fila.id);
+      throw new Error(`Error al subir archivo: ${errorUpload.message}`);
+    }
+
+    // 3. Actualizar CV con file_path_original
+    const { data: actualizado, error: errorUpdate } = await context.supabase
+      .from("resumes")
+      .update({ file_path_original: filePath })
+      .eq("id", fila.id)
+      .eq("user_id", context.userId)
+      .select("*")
+      .single();
+
+    if (errorUpdate) throw new Error(errorUpdate.message);
+
+    return filaACv(actualizado as ResumeRow);
+  });
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}

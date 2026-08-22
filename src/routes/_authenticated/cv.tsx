@@ -26,9 +26,11 @@ import { Badge } from "@/components/ui/badge";
 
 import { type Cv } from "@/lib/cv.model";
 import { getCvPrimario, getCvById, guardarCv, crearCv } from "@/lib/cv.functions";
+import { mejorarCvConJack } from "@/lib/ai/ai.functions";
 import { getMiPerfil } from "@/lib/perfil.functions";
 import { useAuth } from "@/hooks/useAuth";
 import { iniciales, nombreVisible } from "@/hooks/useAuth";
+import { CvDiff } from "@/components/cv-diff";
 
 export const Route = createFileRoute("/_authenticated/cv")({
   validateSearch: (search: Record<string, unknown>) =>
@@ -52,9 +54,9 @@ const perfilQueryKey = ["perfil"];
 const misCvsQueryKey = ["mis-cvs"];
 
 const sugerenciasMock = [
-  "Resaltá logros cuantificables en cada experiencia.",
-  "Usá verbos de acción al inicio de cada bullet.",
-  "Ajustá el perfil al rubro objetivo.",
+  "Mejorá mi perfil profesional",
+  "Reforzá mis experiencias con logros",
+  "Hacé mi CV más breve y claro",
 ];
 
 function CvEditorPage() {
@@ -71,6 +73,7 @@ function CvEditorPage() {
   const fetchPrimary = useServerFn(getCvPrimario);
   const saveCv = useServerFn(guardarCv);
   const createCvFn = useServerFn(crearCv);
+  const mejorarCv = useServerFn(mejorarCvConJack);
 
   const { data: perfil, isPending: perfilPending } = useQuery({
     queryKey: perfilQueryKey,
@@ -94,6 +97,13 @@ function CvEditorPage() {
 
   const [form, setForm] = useState<Cv | null>(null);
   const [creando, setCreando] = useState(false);
+  const [jackLoading, setJackLoading] = useState(false);
+  const [mejora, setMejora] = useState<{
+    mejorado: Cv["contenido"];
+    cambios: Array<{ campo: string; antes: string; despues: string; razon: string }>;
+    preguntas: string[];
+  } | null>(null);
+  const [aplicandoMejora, setAplicandoMejora] = useState(false);
 
   useEffect(() => {
     if (cv) setForm(cv);
@@ -148,20 +158,68 @@ function CvEditorPage() {
     { de: "jack", texto: "Hola, soy Jack. ¿En qué te ayudo con tu CV hoy?" },
   ]);
 
-  const enviarMensaje = () => {
-    if (!mensaje.trim() || !form) return;
-    setMensajes((prev) => [...prev, { de: "yo", texto: mensaje }]);
-    setTimeout(() => {
+  const enviarMensaje = async () => {
+    if (!mensaje.trim() || !form || jackLoading) return;
+    const texto = mensaje.trim();
+    setMensajes((prev) => [...prev, { de: "yo", texto }]);
+    setMensaje("");
+    setJackLoading(true);
+    setMejora(null);
+
+    try {
+      const resultado = await mejorarCv({
+        data: { cvId: form.id, mensajeUsuario: texto },
+      });
+
+      setMensajes((prev) => [
+        ...prev,
+        {
+          de: "jack",
+          texto: `Analicé tu CV. Tengo ${resultado.cambios.length} sugerencia${
+            resultado.cambios.length !== 1 ? "s" : ""
+          }${
+            resultado.preguntas.length
+              ? ` y ${resultado.preguntas.length} pregunta${resultado.preguntas.length !== 1 ? "s" : ""}`
+              : ""
+          }. Revisá los cambios abajo y confirmá si los querés aplicar.`,
+        },
+      ]);
+      setMejora(resultado);
+    } catch (err) {
       setMensajes((prev) => [
         ...prev,
         {
           de: "jack",
           texto:
-            "Buen punto. Podrías reforzar el perfil con logros concretos. ¿Querés que te sugiera un redactado?",
+            err instanceof Error ? err.message : "No pude procesar tu solicitud. Probá de nuevo.",
         },
       ]);
-    }, 800);
-    setMensaje("");
+    } finally {
+      setJackLoading(false);
+    }
+  };
+
+  const aplicarMejora = async () => {
+    if (!form || !mejora) return;
+    setAplicandoMejora(true);
+    try {
+      const nuevoCv = await createCvFn({ data: { title: `${form.title} (mejorado)` } });
+      await saveCv({
+        data: {
+          id: nuevoCv.id,
+          title: nuevoCv.title,
+          contenido: mejora.mejorado,
+        },
+      });
+      toast.success("CV mejorado creado como nueva versión");
+      setMejora(null);
+      queryClient.invalidateQueries({ queryKey: misCvsQueryKey });
+      navigate({ to: "/cv", search: { id: nuevoCv.id } });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al aplicar cambios");
+    } finally {
+      setAplicandoMejora(false);
+    }
   };
 
   if (isPending || perfilPending) {
@@ -282,6 +340,8 @@ function CvEditorPage() {
   const name = nombreVisible(user);
   const initials = iniciales(name);
 
+  const esUpload = cv.sourceType === "uploaded_pdf" || cv.sourceType === "uploaded_docx";
+
   return (
     <AppShell title={form.title} subtitle="Editá el contenido, chateá con Jack y descargá tu PDF.">
       <div className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
@@ -292,6 +352,16 @@ function CvEditorPage() {
           </TabsList>
 
           <TabsContent value="editar" className="space-y-6">
+            {esUpload && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+                <p className="font-medium">CV extraído de archivo</p>
+                <p className="mt-1 text-xs">
+                  Revisá que los datos estén correctos. Si la extracción fue incompleta, completá
+                  manualmente lo que falte.
+                </p>
+              </div>
+            )}
+
             <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
               <div className="mb-4">
                 <Label htmlFor="titulo">Título del CV</Label>
@@ -459,6 +529,34 @@ function CvEditorPage() {
                 </div>
               </div>
             ))}
+
+            {jackLoading && (
+              <div className="flex gap-2">
+                <div className="bg-primary flex size-7 shrink-0 items-center justify-center rounded-full">
+                  <Bot className="size-3.5 text-primary-foreground" />
+                </div>
+                <div className="bg-card max-w-[80%] rounded-2xl px-3 py-2 text-sm">
+                  <Loader2 className="size-4 animate-spin" />
+                </div>
+              </div>
+            )}
+
+            {mejora && (
+              <div className="flex gap-2">
+                <div className="bg-primary flex size-7 shrink-0 items-center justify-center rounded-full">
+                  <Bot className="size-3.5 text-primary-foreground" />
+                </div>
+                <div className="max-w-[95%] flex-1">
+                  <CvDiff
+                    cambios={mejora.cambios}
+                    preguntas={mejora.preguntas}
+                    onAplicar={aplicarMejora}
+                    onCancelar={() => setMejora(null)}
+                    isApplying={aplicandoMejora}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mt-3 space-y-2">
@@ -469,7 +567,13 @@ function CvEditorPage() {
                   key={s}
                   variant="outline"
                   className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                  onClick={() => setMensajes((prev) => [...prev, { de: "jack", texto: s }])}
+                  onClick={() => {
+                    setMensaje(s);
+                    setTimeout(() => {
+                      const btn = document.getElementById("jack-send-btn");
+                      btn?.click();
+                    }, 50);
+                  }}
                 >
                   {s}
                 </Badge>
@@ -492,11 +596,12 @@ function CvEditorPage() {
               className="resize-none text-sm"
             />
             <Button
+              id="jack-send-btn"
               type="button"
               size="icon"
               className="shrink-0"
               onClick={enviarMensaje}
-              disabled={!mensaje.trim()}
+              disabled={!mensaje.trim() || jackLoading}
             >
               <MessageSquare className="size-4" />
             </Button>

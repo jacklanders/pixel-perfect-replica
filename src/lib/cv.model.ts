@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { normalizarContenidoCv, type CvContenido, type ResumeRow } from "@/lib/supabase/types";
+import {
+  normalizarContenidoCv,
+  type CvContenido,
+  type ResumeRow,
+  type ResumeSourceType,
+} from "@/lib/supabase/types";
 
 export const experienciaSchema = z.object({
   id: z.string().min(1),
@@ -24,6 +29,7 @@ export interface Cv {
   id: string;
   title: string;
   isPrimary: boolean;
+  sourceType: ResumeSourceType;
   version: number;
   updatedAt: string;
   contenido: CvContenido;
@@ -34,6 +40,7 @@ export function filaACv(fila: ResumeRow): Cv {
     id: fila.id,
     title: fila.title,
     isPrimary: fila.is_primary,
+    sourceType: fila.source_type,
     version: fila.version,
     updatedAt: fila.updated_at,
     contenido: normalizarContenidoCv(fila.structured_json),
