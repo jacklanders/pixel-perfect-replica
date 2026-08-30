@@ -68,7 +68,11 @@ function MisCvsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const tipo = detectarTipoArchivo(file);
+    const tipo = await detectarTipoArchivo(file);
+    if (tipo === "doc") {
+      toast.error("Formato .doc (Word antiguo) no soportado: guardá el archivo como .docx o PDF.");
+      return;
+    }
     if (!tipo) {
       toast.error("Solo se aceptan archivos .pdf o .docx");
       return;
@@ -85,8 +89,10 @@ function MisCvsPage() {
 
       if (texto.length < 50) {
         toast.warning(
-          "Extracción incompleta: el archivo parece estar escaneado o protegido. Revisá y completá los datos manualmente.",
+          "No se pudo extraer texto del archivo (está escaneado o usa un formato no estándar). El CV se crea igual con el nombre del archivo: completá los datos en el editor.",
         );
+      } else {
+        toast.success(`Extracción exitosa (${texto.length} caracteres). Se crea tu CV…`);
       }
 
       // Convertir a base64
