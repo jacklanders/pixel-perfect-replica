@@ -3,7 +3,7 @@
  * Server-only.
  */
 
-import { getServiceClient } from "./supabase-service";
+import { getServiceClient, getEnv } from "./supabase-service";
 import { getValidAccessToken, forceRefreshAccessToken } from "@/lib/server/gmail-oauth";
 import { generarPdfBuffer } from "@/lib/server/cv-pdf-server";
 import { validarTamanioAdjunto } from "@/lib/server/adjuntos";
@@ -105,6 +105,12 @@ async function sendGmailRaw(accessToken: string, rawBase64Url: string): Promise<
 
 // ─── Retry con refresh automático ───
 async function sendGmailWithRetry(userId: string, rawBase64Url: string): Promise<{ id: string }> {
+  // En modo E2E (MOCK_GMAIL=true) no llamamos a la API de Gmail; el resto del
+  // flujo (límite diario vía RPC, marcar sent, adjuntos en Storage) sigue real.
+  if (getEnv("MOCK_GMAIL") === "true") {
+    return { id: "mock-message-id" };
+  }
+
   const accessToken = await getValidAccessToken(userId);
   try {
     return await sendGmailRaw(accessToken, rawBase64Url);

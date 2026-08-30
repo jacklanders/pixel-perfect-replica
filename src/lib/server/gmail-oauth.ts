@@ -56,7 +56,19 @@ export interface GoogleTokenResponse {
   scope: string;
 }
 
+// En modo E2E (MOCK_GMAIL=true) devolvemos tokens falsos sin tocar el OAuth de Google.
+// La DB (oauth_connections/oauth_connection_status) sigue escribiéndose de verdad.
 export async function exchangeCodeForTokens(code: string): Promise<GoogleTokenResponse> {
+  if (getEnv("MOCK_GMAIL") === "true") {
+    return {
+      access_token: "mock-access-token",
+      refresh_token: "mock-refresh-token",
+      expires_in: 3600,
+      token_type: "Bearer",
+      scope: "https://www.googleapis.com/auth/gmail.send",
+    };
+  }
+
   const params = new URLSearchParams({
     grant_type: "authorization_code",
     code,
@@ -307,6 +319,17 @@ export async function isGmailConnected(
 ): Promise<{ connected: boolean; email: string | null }> {
   const supabase = getSupabaseServerClient();
 
+  // En modo E2E (MOCK_GMAIL=true) simulamos la conexión activa.
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("email")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (getEnv("MOCK_GMAIL") === "true") {
+    return { connected: true, email: profile?.email ?? null };
+  }
+
   const { data, error } = await supabase
     .from("oauth_connection_status")
     .select("connected")
@@ -315,12 +338,6 @@ export async function isGmailConnected(
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("email")
-    .eq("user_id", userId)
-    .maybeSingle();
 
   return {
     connected: data?.connected ?? false,
