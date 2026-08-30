@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -490,7 +490,21 @@ function DetallePostulacion() {
   }
 
   if (error || !app) {
-    throw notFound();
+    return (
+      <AppShell title="Postulación no encontrada">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          <p>No se pudo cargar la postulación ({id}).</p>
+          <p className="mt-1 font-mono text-xs break-all">
+            {error instanceof Error ? error.message : String(error ?? "Sin resultados")}
+          </p>
+        </div>
+        <p className="mt-4 text-sm text-muted-foreground">
+          <Link to="/postulaciones" className="underline">
+            Volver al historial
+          </Link>
+        </p>
+      </AppShell>
+    );
   }
 
   const job = app.job_posts;
