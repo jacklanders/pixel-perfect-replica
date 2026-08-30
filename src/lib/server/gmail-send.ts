@@ -6,11 +6,15 @@
 import { getServiceClient } from "./supabase-service";
 import { getValidAccessToken, forceRefreshAccessToken } from "@/lib/server/gmail-oauth";
 import { generarPdfBuffer } from "@/lib/server/cv-pdf-server";
+import { validarTamanioAdjunto } from "@/lib/server/adjuntos";
 import type { Cv } from "@/lib/cv.model";
 import type { Perfil } from "@/lib/perfil.model";
 
-const MAX_ATTACHMENT_SIZE_MB = 10;
-const MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
+export interface AdjuntoArchivo {
+  storagePath: string;
+  fileName: string;
+  mimeType: string;
+}
 
 // ─── Base64 helpers (universal: Node/Bun/Workers) ───
 function utf8ToBase64(str: string): string {
@@ -133,7 +137,10 @@ async function obtenerCvAttachment(
   if (error || !resume) return null;
 
   // 2. Si es archivo subido (PDF/DOCX), devolver desde Storage
-  if (resume.source_type === "upload" && resume.file_path_original) {
+  if (
+    (resume.source_type === "uploaded_pdf" || resume.source_type === "uploaded_docx") &&
+    resume.file_path_original
+  ) {
     const { data: fileData, error: fileError } = await supabase.storage
       .from("resumes")
       .download(resume.file_path_original);
@@ -141,9 +148,7 @@ async function obtenerCvAttachment(
     if (fileError || !fileData) return null;
 
     const bytes = new Uint8Array(await fileData.arrayBuffer());
-    if (bytes.length > MAX_ATTACHMENT_BYTES) {
-      throw new Error(`El adjunto excede el límite de ${MAX_ATTACHMENT_SIZE_MB}MB`);
-    }
+    await validarTamanioAdjunto(bytes);
 
     const isPdf = resume.file_path_original.endsWith(".pdf");
     return {
@@ -161,13 +166,34 @@ async function obtenerCvAttachment(
   if (!cvData) return null;
 
   const bytes = await generarPdfBuffer(cvData, perfil, perfil?.nombre ?? "CV");
-  if (bytes.length > MAX_ATTACHMENT_BYTES) {
-    throw new Error(`El CV generado excede el límite de ${MAX_ATTACHMENT_SIZE_MB}MB`);
-  }
+  await validarTamanioAdjunto(bytes);
 
   return {
     filename: `${resume.title || "CV"}.pdf`,
     mimeType: "application/pdf",
+    bytes,
+  };
+}
+
+// ─── Adjunto por archivo temporal subido (PDF/DOCX) ───
+async function obtenerAdjuntoArchivo(
+  adjunto: AdjuntoArchivo,
+  supabase: ReturnType<typeof getServiceClient>,
+): Promise<{ filename: string; mimeType: string; bytes: Uint8Array } | null> {
+  const { data: fileData, error: fileError } = await supabase.storage
+    .from("resumes")
+    .download(adjunto.storagePath);
+
+  if (fileError || !fileData) {
+    throw new Error("No se pudo leer el archivo adjuntado. Volvé a seleccionarlo.");
+  }
+
+  const bytes = new Uint8Array(await fileData.arrayBuffer());
+  await validarTamanioAdjunto(bytes);
+
+  return {
+    filename: adjunto.fileName,
+    mimeType: adjunto.mimeType,
     bytes,
   };
 }
@@ -181,11 +207,17 @@ export async function enviarPostulacionGmail(options: {
   body: string;
   resumeId: string | null;
   includeCopy: boolean;
+  adjunto?: AdjuntoArchivo | null;
 }): Promise<{ messageId: string }> {
   const supabase = getServiceClient();
 
-  // 1. Obtener adjunto
-  const attachment = await obtenerCvAttachment(options.userId, options.resumeId, supabase);
+  // 1. Obtener adjunto: archivo temporal (PDF/DOCX subido) o CV guardado
+  let attachment: { filename: string; mimeType: string; bytes: Uint8Array } | null = null;
+  if (options.adjunto) {
+    attachment = await obtenerAdjuntoArchivo(options.adjunto, supabase);
+  } else {
+    attachment = await obtenerCvAttachment(options.userId, options.resumeId, supabase);
+  }
 
   // 2. Armar MIME
   const mimeMessage = buildMimeMessage({
@@ -202,6 +234,14 @@ export async function enviarPostulacionGmail(options: {
 
   // 4. Enviar vía Gmail API (con retry por refresh)
   const result = await sendGmailWithRetry(options.userId, rawBase64Url);
+
+  // 5. Limpiar adjunto temporal tras envío exitoso
+  if (options.adjunto) {
+    await supabase.storage
+      .from("resumes")
+      .remove([options.adjunto.storagePath])
+      .catch(() => {});
+  }
 
   return { messageId: result.id };
 }

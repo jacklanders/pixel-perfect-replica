@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -31,6 +31,7 @@ import {
   Trash2,
   Mail,
   Unlink,
+  Upload,
 } from "lucide-react";
 import {
   getApplicationById,
@@ -40,6 +41,7 @@ import {
   getUsoDiario,
   enviarEmailGmail,
 } from "@/lib/application.functions";
+import { subirAdjuntoTemporal, borrarAdjuntoTemporal } from "@/lib/attachment.functions";
 import { listarCvs } from "@/lib/cv.functions";
 import { getMiPerfil } from "@/lib/perfil.functions";
 import { verificarEstadoGmail, generarGmailAuthUrl, desconectarGmail } from "@/lib/oauth.functions";
@@ -85,6 +87,24 @@ async function cambiarStatus(payload: StatusInput) {
   return actualizarApplicationStatus({
     data: payload,
   } as unknown as Parameters<typeof actualizarApplicationStatus>[0]);
+}
+
+type SubirAdjuntoInput = {
+  fileName: string;
+  mimeType: string;
+  fileBase64: string;
+};
+
+async function subirTemporal(payload: SubirAdjuntoInput) {
+  return subirAdjuntoTemporal({
+    data: payload,
+  } as unknown as Parameters<typeof subirAdjuntoTemporal>[0]);
+}
+
+async function borrarTemporal(storagePath: string) {
+  return borrarAdjuntoTemporal({
+    data: { storagePath },
+  } as unknown as Parameters<typeof borrarAdjuntoTemporal>[0]);
 }
 
 /* ─── Tipos ─── */
@@ -141,6 +161,11 @@ function estaVencido(closingAt: string | null): boolean {
 function formatearFecha(fecha: string | null): string {
   if (!fecha) return "sin fecha";
   return new Date(fecha).toLocaleDateString("es-AR");
+}
+
+function formatearBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 function CampoCopiable({
@@ -265,21 +290,37 @@ function DetallePostulacion() {
   const [asuntoElegido, setAsuntoElegido] = useState<"generico" | "obligatorio">("generico");
   const [cuerpo, setCuerpo] = useState("");
   const [destino, setDestino] = useState("");
-  const [cvId, setCvId] = useState("");
+  const [jackCvId, setJackCvId] = useState("");
   const [firma, setFirma] = useState("");
   const [includeCopy, setIncludeCopy] = useState(false);
   const [showReconnectDialog, setShowReconnectDialog] = useState(false);
   const [gmailError, setGmailError] = useState<string | null>(null);
+  const [adjuntoModo, setAdjuntoModo] = useState<"jack" | "archivo">("jack");
+  const [archivoAdjunto, setArchivoAdjunto] = useState<{
+    storagePath: string;
+    fileName: string;
+    mimeType: string;
+    size: number;
+  } | null>(null);
+  const [adjuntoError, setAdjuntoError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   /* ─── Sincronizar con datos reales ─── */
   useEffect(() => {
     if (app) {
       setCuerpo(app.generated_body ?? "");
       setDestino(app.destination_email ?? "");
-      setCvId(app.resume_id ?? "");
       setAsuntoElegido(app.required_subject ? "obligatorio" : "generico");
+      const original = cvs?.find((c) => c.id === app.resume_id);
+      if (original?.sourceType === "created_from_scratch") {
+        setJackCvId(original.id);
+        setAdjuntoModo("jack");
+      } else {
+        setJackCvId("");
+        setAdjuntoModo("jack");
+      }
     }
-  }, [app]);
+  }, [app, cvs]);
 
   useEffect(() => {
     if (perfil) {
@@ -322,11 +363,20 @@ function DetallePostulacion() {
           destination_email: destino,
           generated_subject: asuntoActual,
           includeCopy,
+          ...(adjuntoModo === "archivo" && archivoAdjunto
+            ? {
+                resumeId: null,
+                adjuntoStoragePath: archivoAdjunto.storagePath,
+                adjuntoFileName: archivoAdjunto.fileName,
+                adjuntoMimeType: archivoAdjunto.mimeType,
+              }
+            : { resumeId: jackCvId || null }),
         },
       } as unknown as Parameters<typeof enviarEmailGmail>[0]),
     onSuccess: () => {
       toast.success("Postulación enviada por Gmail");
       setGmailError(null);
+      setArchivoAdjunto(null);
       void refetchGmail();
     },
     onError: (err) => {
@@ -364,6 +414,54 @@ function DetallePostulacion() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "Error al desconectar"),
   });
 
+  /* ─── Subir adjunto temporal (PDF/DOCX) ─── */
+  const subirAdjunto = useMutation({
+    mutationFn: async (file: File) => {
+      const MAX_BYTES = 10 * 1024 * 1024;
+      if (file.size > MAX_BYTES) {
+        throw new Error("El archivo excede el límite de 10MB. Elegí un PDF o DOCX más liviano.");
+      }
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      if (ext !== "pdf" && ext !== "docx") {
+        throw new Error("Solo se admiten archivos PDF o DOCX.");
+      }
+      const mimeType =
+        ext === "pdf"
+          ? "application/pdf"
+          : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]!);
+      }
+      const fileBase64 = btoa(binary);
+
+      return subirTemporal({ fileName: file.name, mimeType, fileBase64 });
+    },
+    onSuccess: (res) => {
+      setArchivoAdjunto(res);
+      setAdjuntoError(null);
+      toast.success("Archivo listo para adjuntar");
+    },
+    onError: (err) => {
+      setArchivoAdjunto(null);
+      setAdjuntoError(err instanceof Error ? err.message : "No se pudo subir el adjunto");
+    },
+  });
+
+  /* ─── Cambiar de opción de adjunto (limpia archivo temporal si se reemplaza) ─── */
+  const cambiarModoAdjunto = (modo: "jack" | "archivo") => {
+    setAdjuntoModo(modo);
+    setAdjuntoError(null);
+    if (modo === "jack" && archivoAdjunto) {
+      void borrarTemporal(archivoAdjunto.storagePath).catch(() => {});
+      setArchivoAdjunto(null);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   /* ─── Conectar Gmail ─── */
   const conectarGmail = async () => {
     try {
@@ -400,7 +498,16 @@ function DetallePostulacion() {
       : app.generated_subject;
 
   const isGmailConnected = gmailStatus?.connected ?? false;
-  const isSending = enviar.isPending || enviarGmail.isPending || guardar.isPending;
+  const isSending =
+    enviar.isPending || enviarGmail.isPending || guardar.isPending || subirAdjunto.isPending;
+
+  /* ─── Adjunto: derivados ─── */
+  const cvsJack = cvs?.filter((c) => c.sourceType === "created_from_scratch") ?? [];
+  const adjuntoJack = cvsJack.find((c) => c.id === jackCvId);
+  const adjuntoListo =
+    adjuntoModo === "jack"
+      ? jackCvId.length > 0
+      : archivoAdjunto !== null && adjuntoError === null && !subirAdjunto.isPending;
 
   /* ─── Copiar todo ─── */
   const copiarTodo = () => {
@@ -486,35 +593,156 @@ function DetallePostulacion() {
             </Button>
           </div>
 
-          {/* CV adjunto */}
-          <div className="space-y-2">
+          {/* Adjunto */}
+          <div className="space-y-3">
             <Label className="flex items-center gap-1.5">
-              <Paperclip className="size-3.5" /> CV adjunto
+              <Paperclip className="size-3.5" /> Adjunto
             </Label>
-            {cvs && cvs.length > 0 ? (
-              <div className="grid gap-2">
-                {cvs.map((cv) => (
-                  <button
-                    key={cv.id}
-                    type="button"
-                    onClick={() => setCvId(cv.id)}
-                    className={`flex items-center justify-between rounded-lg border p-3 text-left text-sm transition-colors ${
-                      cvId === cv.id
-                        ? "border-primary bg-secondary"
-                        : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <FileText className="size-4" />
-                      {cv.title}
-                    </span>
-                    {cvId === cv.id ? <Check className="size-4 text-primary" /> : null}
-                  </button>
-                ))}
-              </div>
+
+            {/* Selector de modo */}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => cambiarModoAdjunto("jack")}
+                className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                  adjuntoModo === "jack"
+                    ? "border-primary bg-secondary"
+                    : "border-border hover:bg-muted"
+                }`}
+              >
+                <span className="flex items-center gap-2 font-medium">
+                  <Sparkles className="size-4 text-accent" /> Usar mi CV de Jack
+                </span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Generamos el PDF de tu CV al enviar
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => cambiarModoAdjunto("archivo")}
+                className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                  adjuntoModo === "archivo"
+                    ? "border-primary bg-secondary"
+                    : "border-border hover:bg-muted"
+                }`}
+              >
+                <span className="flex items-center gap-2 font-medium">
+                  <Upload className="size-4" /> Subir archivo
+                </span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  PDF o DOCX desde tu disco (máx. 10MB)
+                </span>
+              </button>
+            </div>
+
+            {/* Opción A: CV de Jack */}
+            {adjuntoModo === "jack" ? (
+              cvsJack.length > 0 ? (
+                <div className="grid gap-2">
+                  {cvsJack.map((cv) => (
+                    <button
+                      key={cv.id}
+                      type="button"
+                      onClick={() => setJackCvId(cv.id)}
+                      className={`flex items-center justify-between rounded-lg border p-3 text-left text-sm transition-colors ${
+                        jackCvId === cv.id
+                          ? "border-primary bg-secondary"
+                          : "border-border hover:bg-muted"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileText className="size-4" />
+                        {cv.title}
+                      </span>
+                      {jackCvId === cv.id ? <Check className="size-4 text-primary" /> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                  No tenés CVs generados por Jack.{" "}
+                  <Link to="/cv" className="underline">
+                    Creá uno primero
+                  </Link>{" "}
+                  o subí un archivo.
+                </p>
+              )
             ) : (
-              <p className="text-sm text-muted-foreground">No tenés CVs guardados.</p>
+              /* ─── Opción B: subir archivo ─── */
+              <div className="space-y-3">
+                {archivoAdjunto ? (
+                  <div className="flex items-center justify-between rounded-lg border border-primary/40 bg-secondary p-3 text-sm">
+                    <span className="flex items-center gap-2">
+                      <FileText className="size-4 text-primary" />
+                      <span className="font-medium">{archivoAdjunto.fileName}</span>
+                      <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-xs">
+                        {formatearBytes(archivoAdjunto.size)}
+                      </Badge>
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        void borrarTemporal(archivoAdjunto.storagePath).catch(() => {});
+                        setArchivoAdjunto(null);
+                        setAdjuntoError(null);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                    >
+                      <Trash2 className="size-3.5" /> Quitar
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) subirAdjunto.mutate(file);
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={subirAdjunto.isPending}
+                    >
+                      {subirAdjunto.isPending ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Upload className="size-4" />
+                      )}
+                      Seleccionar PDF o DOCX
+                    </Button>
+                    {subirAdjunto.isPending ? (
+                      <span className="text-xs text-muted-foreground">Subiendo archivo…</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        Se adjunta tal cual, sin procesamiento.
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {adjuntoError ? (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                    {adjuntoError}
+                  </div>
+                ) : null}
+              </div>
             )}
+
+            {/* Resumen del adjunto elegido */}
+            {adjuntoListo ? (
+              <p className="text-xs text-muted-foreground">
+                {adjuntoModo === "jack"
+                  ? `Adjuntando: ${adjuntoJack?.title ?? "CV"} · PDF generado por Jack`
+                  : `Adjuntando: ${archivoAdjunto?.fileName} · ${formatearBytes(archivoAdjunto?.size ?? 0)}`}
+              </p>
+            ) : null}
           </div>
 
           {/* Límite alcanzado */}
@@ -579,7 +807,8 @@ function DetallePostulacion() {
                 {isGmailConnected ? (
                   <Button
                     onClick={() => enviarGmail.mutate()}
-                    disabled={isSending || limiteAlcanzado}
+                    disabled={isSending || limiteAlcanzado || !adjuntoListo}
+                    title={!adjuntoListo ? "Elegí un CV o subí un archivo adjunto" : undefined}
                   >
                     {enviarGmail.isPending ? (
                       <Loader2 className="size-4 animate-spin" />

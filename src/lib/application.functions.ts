@@ -194,6 +194,10 @@ export const enviarEmailGmail = createServerFn({ method: "POST" })
       destination_email: z.string().email().optional(),
       generated_subject: z.string().optional(),
       includeCopy: z.boolean().optional().default(false),
+      resumeId: z.string().uuid().nullable().optional(),
+      adjuntoStoragePath: z.string().optional(),
+      adjuntoFileName: z.string().optional(),
+      adjuntoMimeType: z.string().optional(),
     }),
   )
   .handler(async ({ data, context }) => {
@@ -227,6 +231,19 @@ export const enviarEmailGmail = createServerFn({ method: "POST" })
     const fromEmail = context.email ?? "";
     if (!fromEmail) throw new Error("No se pudo determinar el email del remitente");
 
+    // 3b. Adjunto: o un archivo temporal subido (PDF/DOCX), o el CV seleccionado.
+    // Si el usuario eligió "Subir archivo", forzamos resumeId = null para no duplicar.
+    const adjunto =
+      data.adjuntoStoragePath && data.adjuntoFileName && data.adjuntoMimeType
+        ? {
+            storagePath: data.adjuntoStoragePath,
+            fileName: data.adjuntoFileName,
+            mimeType: data.adjuntoMimeType,
+          }
+        : undefined;
+
+    const resumeId = data.resumeId !== undefined ? data.resumeId : app.resume_id;
+
     // 4. Enviar vía Gmail API
     const { messageId } = await enviarPostulacionGmail({
       userId: context.userId,
@@ -234,8 +251,9 @@ export const enviarEmailGmail = createServerFn({ method: "POST" })
       toEmail,
       subject,
       body,
-      resumeId: app.resume_id,
+      resumeId,
       includeCopy: data.includeCopy,
+      ...(adjunto ? { adjunto } : {}),
     });
 
     // 5. Marcar como enviada
