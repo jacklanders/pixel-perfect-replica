@@ -181,3 +181,79 @@ export const getUsoDiario = createServerFn({ method: "GET" })
       limit: 2,
     };
   });
+
+import { enviarPostulacionGmail } from "@/lib/server/gmail-send";
+
+// ─── Enviar postulación REAL vía Gmail API ───
+export const enviarEmailGmail = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    z.object({
+      applicationId: z.string().uuid(),
+      generated_body: z.string().optional(),
+      destination_email: z.string().email().optional(),
+      generated_subject: z.string().optional(),
+      includeCopy: z.boolean().optional().default(false),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = context.supabase;
+
+    // 1. Leer application completa
+    const { data: app, error: appError } = await supabase
+      .from("applications")
+      .select("*, job_posts(*), resumes(id, title)")
+      .eq("id", data.applicationId)
+      .eq("user_id", context.userId)
+      .single();
+
+    if (appError || !app) throw new Error("Postulación no encontrada");
+
+    // 2. Verificar límite diario
+    const { data: limitResult, error: limitError } = await supabase.rpc("increment_daily_usage", {
+      p_limit: 2,
+    });
+    if (limitError) throw new Error(limitError.message);
+
+    const allowed = (limitResult as { allowed: boolean }[])[0]?.allowed ?? false;
+    if (!allowed) {
+      throw new Error("Límite diario alcanzado. Podés generar hasta 2 postulaciones por día.");
+    }
+
+    // 3. Preparar datos del email
+    const subject = data.generated_subject ?? app.generated_subject ?? "Postulación";
+    const body = data.generated_body ?? app.generated_body ?? "";
+    const toEmail = data.destination_email ?? app.destination_email ?? "";
+    const fromEmail = context.email ?? "";
+    if (!fromEmail) throw new Error("No se pudo determinar el email del remitente");
+
+    // 4. Enviar vía Gmail API
+    const { messageId } = await enviarPostulacionGmail({
+      userId: context.userId,
+      fromEmail,
+      toEmail,
+      subject,
+      body,
+      resumeId: app.resume_id,
+      includeCopy: data.includeCopy,
+    });
+
+    // 5. Marcar como enviada
+    const { data: row, error } = await supabase
+      .from("applications")
+      .update({
+        status: "sent",
+        sent_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        generated_body: data.generated_body,
+        destination_email: data.destination_email,
+        generated_subject: data.generated_subject,
+      })
+      .eq("id", data.applicationId)
+      .eq("user_id", context.userId)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    return { ...row, messageId };
+  });

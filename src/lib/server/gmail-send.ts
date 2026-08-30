@@ -1,0 +1,207 @@
+/**
+ * Envío de emails vía Gmail API usando MIME multipart.
+ * Server-only.
+ */
+
+import { getServiceClient } from "./supabase-service";
+import { getValidAccessToken, forceRefreshAccessToken } from "@/lib/server/gmail-oauth";
+import { generarPdfBuffer } from "@/lib/server/cv-pdf-server";
+import type { Cv } from "@/lib/cv.model";
+import type { Perfil } from "@/lib/perfil.model";
+
+const MAX_ATTACHMENT_SIZE_MB = 10;
+const MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
+
+// ─── Base64 helpers (universal: Node/Bun/Workers) ───
+function utf8ToBase64(str: string): string {
+  const bytes = new TextEncoder().encode(str);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  return btoa(binary);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  return btoa(binary);
+}
+
+function toBase64Url(base64: string): string {
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function encodeMimeHeader(text: string): string {
+  return `=?UTF-8?B?${utf8ToBase64(text)}?=`; // Fixed: was missing closing ?=
+}
+
+// ─── Build MIME message ───
+function buildMimeMessage(options: {
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+  attachment?: { filename: string; mimeType: string; bytes: Uint8Array };
+  bcc?: string;
+}): string {
+  const boundary = `----=_Part_${Math.random().toString(36).substring(2)}_${Date.now()}`;
+
+  let mime = `MIME-Version: 1.0\r\n`;
+  mime += `From: ${options.from}\r\n`;
+  mime += `To: ${options.to}\r\n`;
+  if (options.bcc) mime += `Bcc: ${options.bcc}\r\n`;
+  mime += `Subject: ${encodeMimeHeader(options.subject)}\r\n`;
+  mime += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n`;
+  mime += `\r\n`;
+
+  // Text part
+  mime += `--${boundary}\r\n`;
+  mime += `Content-Type: text/plain; charset="UTF-8"\r\n`;
+  mime += `Content-Transfer-Encoding: base64\r\n`;
+  mime += `\r\n`;
+  mime += `${utf8ToBase64(options.body)}\r\n`;
+  mime += `\r\n`;
+
+  // Attachment part
+  if (options.attachment) {
+    mime += `--${boundary}\r\n`;
+    mime += `Content-Type: ${options.attachment.mimeType}; name="${options.attachment.filename}"\r\n`;
+    mime += `Content-Disposition: attachment; filename="${options.attachment.filename}"\r\n`;
+    mime += `Content-Transfer-Encoding: base64\r\n`;
+    mime += `\r\n`;
+    mime += `${bytesToBase64(options.attachment.bytes)}\r\n`;
+    mime += `\r\n`;
+  }
+
+  mime += `--${boundary}--\r\n`;
+  return mime;
+}
+
+// ─── Call Gmail API ───
+async function sendGmailRaw(accessToken: string, rawBase64Url: string): Promise<{ id: string }> {
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ raw: rawBase64Url }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gmail API error (${res.status}): ${err}`);
+  }
+
+  return res.json() as Promise<{ id: string }>;
+}
+
+// ─── Retry con refresh automático ───
+async function sendGmailWithRetry(userId: string, rawBase64Url: string): Promise<{ id: string }> {
+  const accessToken = await getValidAccessToken(userId);
+  try {
+    return await sendGmailRaw(accessToken, rawBase64Url);
+  } catch (err) {
+    // Si es 401, forzar refresh y reintentar una vez
+    if (err instanceof Error && err.message.includes("401")) {
+      const newToken = await forceRefreshAccessToken(userId);
+      return await sendGmailRaw(newToken, rawBase64Url);
+    }
+    throw err;
+  }
+}
+
+// ─── Obtener CV como attachment ───
+async function obtenerCvAttachment(
+  userId: string,
+  resumeId: string | null,
+  supabase: ReturnType<typeof getServiceClient>,
+): Promise<{ filename: string; mimeType: string; bytes: Uint8Array } | null> {
+  if (!resumeId) return null;
+
+  // 1. Leer resume
+  const { data: resume, error } = await supabase
+    .from("resumes")
+    .select("*, profiles(user_id, nombre, email, ubicacion, telefono, skills)")
+    .eq("id", resumeId)
+    .eq("user_id", userId)
+    .single();
+
+  if (error || !resume) return null;
+
+  // 2. Si es archivo subido (PDF/DOCX), devolver desde Storage
+  if (resume.source_type === "upload" && resume.file_path_original) {
+    const { data: fileData, error: fileError } = await supabase.storage
+      .from("resumes")
+      .download(resume.file_path_original);
+
+    if (fileError || !fileData) return null;
+
+    const bytes = new Uint8Array(await fileData.arrayBuffer());
+    if (bytes.length > MAX_ATTACHMENT_BYTES) {
+      throw new Error(`El adjunto excede el límite de ${MAX_ATTACHMENT_SIZE_MB}MB`);
+    }
+
+    const isPdf = resume.file_path_original.endsWith(".pdf");
+    return {
+      filename: resume.title ? `${resume.title}.pdf` : "CV.pdf",
+      mimeType: isPdf
+        ? "application/pdf"
+        : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      bytes,
+    };
+  }
+
+  // 3. Si es CV generado por Jack, generar PDF on-the-fly
+  const perfil = resume.profiles as unknown as Perfil | null;
+  const cvData = resume.structured_json as unknown as Cv | null;
+  if (!cvData) return null;
+
+  const bytes = await generarPdfBuffer(cvData, perfil, perfil?.nombre ?? "CV");
+  if (bytes.length > MAX_ATTACHMENT_BYTES) {
+    throw new Error(`El CV generado excede el límite de ${MAX_ATTACHMENT_SIZE_MB}MB`);
+  }
+
+  return {
+    filename: `${resume.title || "CV"}.pdf`,
+    mimeType: "application/pdf",
+    bytes,
+  };
+}
+
+// ─── Función principal: enviar postulación por Gmail ───
+export async function enviarPostulacionGmail(options: {
+  userId: string;
+  fromEmail: string;
+  toEmail: string;
+  subject: string;
+  body: string;
+  resumeId: string | null;
+  includeCopy: boolean;
+}): Promise<{ messageId: string }> {
+  const supabase = getServiceClient();
+
+  // 1. Obtener adjunto
+  const attachment = await obtenerCvAttachment(options.userId, options.resumeId, supabase);
+
+  // 2. Armar MIME
+  const mimeMessage = buildMimeMessage({
+    from: options.fromEmail,
+    to: options.toEmail,
+    subject: options.subject,
+    body: options.body,
+    ...(attachment ? { attachment } : {}),
+    ...(options.includeCopy ? { bcc: options.fromEmail } : {}),
+  });
+
+  // 3. Codificar a base64url
+  const rawBase64Url = toBase64Url(utf8ToBase64(mimeMessage));
+
+  // 4. Enviar vía Gmail API (con retry por refresh)
+  const result = await sendGmailWithRetry(options.userId, rawBase64Url);
+
+  return { messageId: result.id };
+}

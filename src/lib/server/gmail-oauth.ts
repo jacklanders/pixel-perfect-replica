@@ -1,31 +1,11 @@
 /**
  * Lógica server-only para OAuth de Gmail.
- *
- * - Genera URLs de autorización
- * - Intercambia codes por tokens
- * - Refresca access tokens automáticamente
- * - Revoca tokens al desconectar
- * - Guarda/lee tokens en Supabase (service_role únicamente)
- *
- * Seguridad:
- * - Los tokens NUNCA se envían al frontend.
- * - La tabla oauth_connections no tiene RLS para authenticated/anon.
- * - Solo service_role puede leer/escribir.
- * - Los tokens se encriptan con AES-256-GCM antes de guardar en DB.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { getServiceClient, getEnv } from "./supabase-service";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 // ─── Config ───
-function getEnv(key: string): string | undefined {
-  try {
-    return process.env[key];
-  } catch {
-    return undefined;
-  }
-}
-
 const GOOGLE_CLIENT_ID = getEnv("GOOGLE_CLIENT_ID") ?? "";
 const GOOGLE_CLIENT_SECRET = getEnv("GOOGLE_CLIENT_SECRET") ?? "";
 const GOOGLE_REDIRECT_URI =
@@ -35,16 +15,6 @@ const OAUTH_ENCRYPTION_KEY =
 
 if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
   throw new Error("Faltan GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET");
-}
-
-// ─── Service Role Client (para tocar oauth_connections) ───
-function getServiceClient() {
-  const url = getEnv("VITE_SUPABASE_URL");
-  const key = getEnv("SUPABASE_SERVICE_ROLE_KEY");
-  if (!url || !key) throw new Error("Faltan VITE_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY");
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
 }
 
 // ─── Encriptación AES-256-GCM ───
@@ -57,7 +27,7 @@ async function getCryptoKey(): Promise<CryptoKey> {
   ]);
 }
 
-async function encrypt(text: string): Promise<string> {
+export async function encrypt(text: string): Promise<string> {
   const key = await getCryptoKey();
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encoder = new TextEncoder();
@@ -68,7 +38,7 @@ async function encrypt(text: string): Promise<string> {
   return btoa(String.fromCharCode(...combined));
 }
 
-async function decrypt(base64: string): Promise<string> {
+export async function decrypt(base64: string): Promise<string> {
   const key = await getCryptoKey();
   const combined = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
   const iv = combined.slice(0, 12);
@@ -78,7 +48,7 @@ async function decrypt(base64: string): Promise<string> {
 }
 
 // ─── Google OAuth2 helpers ───
-interface GoogleTokenResponse {
+export interface GoogleTokenResponse {
   access_token: string;
   refresh_token?: string;
   expires_in: number;
@@ -175,7 +145,6 @@ export async function saveGmailTokens(userId: string, tokens: GoogleTokenRespons
 
   if (error) throw new Error(`Error guardando tokens: ${error.message}`);
 
-  // Actualizar flag de estado (legible por el usuario vía RLS)
   const { error: statusError } = await supabase.from("oauth_connection_status").upsert(
     {
       user_id: userId,
@@ -204,14 +173,12 @@ export async function getValidAccessToken(userId: string): Promise<string> {
 
   const expiresAt = data.expires_at ? new Date(data.expires_at) : null;
   const now = new Date();
-  const bufferMs = 60_000; // 1 minuto de margen
+  const bufferMs = 60_000;
 
-  // Si no expira pronto, devolver el access token actual
   if (expiresAt && expiresAt.getTime() - now.getTime() > bufferMs && data.encrypted_access_token) {
     return decrypt(data.encrypted_access_token);
   }
 
-  // Necesita refresh
   if (!data.encrypted_refresh_token) {
     throw new Error("Token expirado y no hay refresh token disponible");
   }
@@ -219,7 +186,6 @@ export async function getValidAccessToken(userId: string): Promise<string> {
   const refreshToken = await decrypt(data.encrypted_refresh_token);
   const refreshed = await refreshAccessToken(refreshToken);
 
-  // Guardar nuevo access token
   const newEncryptedAccess = await encrypt(refreshed.access_token);
   const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
 
@@ -237,11 +203,43 @@ export async function getValidAccessToken(userId: string): Promise<string> {
   return refreshed.access_token;
 }
 
+// ─── Forzar refresh (para retry tras 401 de Gmail API) ───
+export async function forceRefreshAccessToken(userId: string): Promise<string> {
+  const supabase = getServiceClient();
+
+  const { data } = await supabase
+    .from("oauth_connections")
+    .select("encrypted_refresh_token")
+    .eq("user_id", userId)
+    .eq("provider", "google_gmail")
+    .single();
+
+  if (!data?.encrypted_refresh_token) {
+    throw new Error("No hay refresh token para forzar renovación");
+  }
+
+  const refreshToken = await decrypt(data.encrypted_refresh_token);
+  const refreshed = await refreshAccessToken(refreshToken);
+
+  const newEncryptedAccess = await encrypt(refreshed.access_token);
+  const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
+
+  await supabase
+    .from("oauth_connections")
+    .update({
+      encrypted_access_token: newEncryptedAccess,
+      expires_at: newExpiresAt,
+    })
+    .eq("user_id", userId)
+    .eq("provider", "google_gmail");
+
+  return refreshed.access_token;
+}
+
 // ─── Desconectar Gmail ───
 export async function disconnectGmail(userId: string): Promise<void> {
   const supabase = getServiceClient();
 
-  // 1. Leer refresh token para revocarlo en Google
   const { data } = await supabase
     .from("oauth_connections")
     .select("encrypted_refresh_token")
@@ -254,18 +252,16 @@ export async function disconnectGmail(userId: string): Promise<void> {
       const refreshToken = await decrypt(data.encrypted_refresh_token);
       await revokeGoogleToken(refreshToken);
     } catch {
-      // Si falla la revocación, continuar igual para limpiar la DB
+      // continuar igual
     }
   }
 
-  // 2. Eliminar de oauth_connections
   await supabase
     .from("oauth_connections")
     .delete()
     .eq("user_id", userId)
     .eq("provider", "google_gmail");
 
-  // 3. Actualizar estado
   await supabase.from("oauth_connection_status").upsert(
     {
       user_id: userId,
@@ -281,7 +277,7 @@ export async function disconnectGmail(userId: string): Promise<void> {
 export async function isGmailConnected(
   userId: string,
 ): Promise<{ connected: boolean; email: string | null }> {
-  const supabase = getSupabaseServerClient(); // cliente con RLS
+  const supabase = getSupabaseServerClient();
 
   const { data, error } = await supabase
     .from("oauth_connection_status")
