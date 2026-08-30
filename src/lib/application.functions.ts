@@ -71,7 +71,7 @@ export const actualizarApplicationStatus = createServerFn({ method: "POST" })
     return row;
   });
 
-// ─── Slice F: Enviar postulación con límite diario ───
+// ─── Enviar postulación con límite diario ───
 export const enviarPostulacion = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator(z.object({ applicationId: z.string() }))
@@ -79,19 +79,14 @@ export const enviarPostulacion = createServerFn({ method: "POST" })
     // 1. Verificar límite diario (transaccional en Postgres)
     const { data: limitResult, error: limitError } = await context.supabase.rpc(
       "increment_daily_usage",
-      {
-        p_user_id: context.userId,
-        p_max_applications: 2,
-      },
+      { p_limit: 2 },
     );
 
     if (limitError) throw new Error(limitError.message);
 
-    const allowed = (limitResult as { allowed: boolean }).allowed;
+    const allowed = (limitResult as { allowed: boolean }[])[0]?.allowed ?? false;
     if (!allowed) {
-      throw new Error(
-        "Límite diario alcanzado. Podés generar hasta 2 postulaciones por día.",
-      );
+      throw new Error("Límite diario alcanzado. Podés generar hasta 2 postulaciones por día.");
     }
 
     // 2. Marcar como enviada
@@ -109,4 +104,23 @@ export const enviarPostulacion = createServerFn({ method: "POST" })
 
     if (error) throw new Error(error.message);
     return row;
+  });
+
+// ─── Consultar uso diario real (para AppShell e indicadores) ───
+export const getUsoDiario = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const today = new Date().toISOString().split("T")[0];
+    const { data, error } = await context.supabase
+      .from("daily_usage")
+      .select("application_generations")
+      .eq("user_id", context.userId)
+      .eq("usage_date", today)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    return {
+      used_today: data?.application_generations ?? 0,
+      remaining_today: Math.max(0, 2 - (data?.application_generations ?? 0)),
+    };
   });
