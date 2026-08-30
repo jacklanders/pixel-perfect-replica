@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
+import { filaAPerfil } from "@/lib/perfil.model";
 import type { Perfil } from "@/lib/perfil.model";
 
 export const getMiPerfil = createServerFn({ method: "GET" })
@@ -42,7 +43,7 @@ export const getMiPerfil = createServerFn({ method: "GET" })
         throw new Error(`No se pudo crear el perfil: ${insertError.message}`);
       }
 
-      return inserted as Perfil;
+      return filaAPerfil(inserted);
     }
 
     if (error) {
@@ -50,7 +51,7 @@ export const getMiPerfil = createServerFn({ method: "GET" })
       return null;
     }
 
-    return data as Perfil;
+    return filaAPerfil(data);
   });
 
 const guardarPerfilSchema = z

@@ -55,7 +55,7 @@ export function completitudPerfil(p: Perfil): number {
     p.rubroObjetivo,
     p.resumen,
     p.firmaMail,
-    p.skills.length ? "ok" : "",
+    p.skills?.length ? "ok" : "", // ← CAMBIADO: skills?.length (con ?)
   ];
   const completos = campos.filter((c) => c.trim().length > 0).length;
   return Math.round((completos / campos.length) * 100);

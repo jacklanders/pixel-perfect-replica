@@ -1,7 +1,9 @@
 import { test, expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const authFile = path.join(__dirname, ".auth", "user.json");
 const hasAuth = fs.existsSync(authFile);
 

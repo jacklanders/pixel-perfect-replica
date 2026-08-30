@@ -87,13 +87,16 @@ function PerfilPage() {
     );
   }
 
+  // ← ACA: fuera del return, en el cuerpo de la función
+  const perfilNormalizado: Perfil = { ...PERFIL_VACIO, ...data };
+
   return (
     <AppShell
       title="Tu perfil"
       subtitle="Jack usa estos datos para escribir tu CV y tus postulaciones."
     >
       <PerfilForm
-        perfil={data}
+        perfil={perfilNormalizado}
         onSubmit={(p) => mutation.mutate(p)}
         guardando={mutation.isPending}
       />
