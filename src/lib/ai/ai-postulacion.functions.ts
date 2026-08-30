@@ -92,7 +92,7 @@ export const crearVacanteYPostulacion = createServerFn({ method: "POST" })
         location: z.string().nullable(),
         destination_email: z.string().email().nullable(),
         mandatory_subject: z.string().nullable(),
-        raw_text: z.string().min(1),
+        raw_text: z.string().min(1).or(z.literal("")),
         source_type: z.enum(["text", "image", "url"]),
         closing_date: z.string().nullable(),
         resume_id: z.string().uuid(),
@@ -110,7 +110,7 @@ export const crearVacanteYPostulacion = createServerFn({ method: "POST" })
       .insert({
         user_id: context.userId,
         source_type: data.source_type,
-        raw_text: data.raw_text,
+        raw_text: data.raw_text || null,
         employer: data.company,
         role: data.role,
         location: data.location,
