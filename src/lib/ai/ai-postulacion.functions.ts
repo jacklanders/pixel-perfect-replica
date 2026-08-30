@@ -82,6 +82,10 @@ export const crearVacanteYPostulacion = createServerFn({ method: "POST" })
         source_type: z.enum(["text", "image", "url"]),
         closing_date: z.string().nullable(),
         resume_id: z.string().uuid(),
+        requirements_required: z.array(z.string()),
+        requirements_preferred: z.array(z.string()),
+        confidence: z.number().min(0).max(1),
+        source_notes: z.string(),
       })
       .parse(input),
   )
@@ -99,6 +103,10 @@ export const crearVacanteYPostulacion = createServerFn({ method: "POST" })
         closing_at: data.closing_date,
         extracted_json: {
           mandatory_subject: data.mandatory_subject,
+          requirements_required: data.requirements_required,
+          requirements_preferred: data.requirements_preferred,
+          confidence: data.confidence,
+          source_notes: data.source_notes,
         },
       })
       .select()

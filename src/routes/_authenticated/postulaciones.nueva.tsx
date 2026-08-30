@@ -31,8 +31,11 @@ type CrearInput = {
   source_type: "text" | "image" | "url";
   closing_date: string | null;
   resume_id: string;
+  requirements_required: string[];
+  requirements_preferred: string[];
+  confidence: number;
+  source_notes: string;
 };
-
 async function analizarVacante(rawText: string) {
   return analizarVacanteConJack({
     data: { raw_text: rawText },
@@ -84,8 +87,10 @@ function NuevaPostulacion() {
     mandatory_subject: "",
     closing_date: "",
     confidence: 0,
+    source_notes: "",
+    requirements_required: [] as string[],
+    requirements_preferred: [] as string[],
   });
-
   const [requisitos, setRequisitos] = useState<string[]>([]);
   const [cvId, setCvId] = useState<string>("");
 
@@ -107,6 +112,9 @@ function NuevaPostulacion() {
         mandatory_subject: res.mandatory_subject ?? "",
         closing_date: res.closing_date ?? "",
         confidence: res.confidence,
+        source_notes: res.source_notes,
+        requirements_required: res.requirements_required,
+        requirements_preferred: res.requirements_preferred,
       });
       setRequisitos(res.requirements_required);
       setExtraido(true);
@@ -125,6 +133,10 @@ function NuevaPostulacion() {
         source_type: imagen ? "image" : "text",
         closing_date: datos.closing_date || null,
         resume_id: cvId,
+        requirements_required: datos.requirements_required,
+        requirements_preferred: datos.requirements_preferred,
+        confidence: datos.confidence,
+        source_notes: datos.source_notes,
       }),
     onSuccess: (res) => {
       void navigate({
