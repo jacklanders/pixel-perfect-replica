@@ -11,22 +11,35 @@ function AuthCallback() {
   const [status, setStatus] = useState("Procesando login…");
 
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const code = url.searchParams.get("code");
-    const error = url.searchParams.get("error");
+    const handleAuth = async () => {
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get("code");
+      const error = url.searchParams.get("error");
 
-    if (error) {
-      console.error("[auth] OAuth error:", error);
-      navigate({ to: "/login", search: { error: "auth_fallo" } });
-      return;
-    }
+      if (error) {
+        console.error("[auth] OAuth error:", error);
+        navigate({ to: "/login", search: { error: "auth_fallo" } });
+        return;
+      }
 
-    if (!code) {
-      navigate({ to: "/login", search: { error: "sin_code" } });
-      return;
-    }
+      if (!code) {
+        navigate({ to: "/login", search: { error: "sin_code" } });
+        return;
+      }
 
-    supabase.auth.exchangeCodeForSession(code).then(({ error: exchangeError }) => {
+      // El cliente SSR de Supabase puede haber ya intercambiado el código automáticamente.
+      // Verificamos si ya hay sesión antes de intentar el exchange manual.
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session) {
+        navigate({ to: "/perfil" });
+        return;
+      }
+
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+
       if (exchangeError) {
         console.error("[auth] Exchange failed:", exchangeError.message);
         setStatus("Error al procesar el login. Redirigiendo…");
@@ -39,7 +52,9 @@ function AuthCallback() {
           navigate({ to: "/perfil" });
         }, 500);
       }
-    });
+    };
+
+    handleAuth();
   }, [navigate]);
 
   return (

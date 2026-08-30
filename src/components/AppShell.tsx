@@ -33,6 +33,9 @@ export function AppShell({
     queryFn: () => fetchUso(),
   });
 
+  const usedToday = uso?.used_today ?? 0;
+  const limit = uso?.limit ?? 2;
+
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex max-w-6xl gap-8 px-5 py-6 md:py-10">
@@ -68,7 +71,7 @@ export function AppShell({
               {isPending ? (
                 <Loader2 className="size-6 animate-spin text-muted-foreground" />
               ) : (
-                `${uso.used_today} / ${uso.limit}`
+                `${usedToday} / ${limit}`
               )}
             </p>
             <p className="text-xs text-muted-foreground">postulaciones enviadas hoy</p>
