@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
 import { filaACv, guardarCvSchema, type Cv } from "@/lib/cv.model";
+import { estructurarCvTexto } from "@/lib/ai/estructurar-cv";
 import type { ResumeRow } from "@/lib/supabase/types";
 
 export const getCvById = createServerFn({ method: "GET" })
@@ -163,14 +164,17 @@ export const crearCvDesdeUpload = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }): Promise<Cv> => {
-    // 1. Crear CV en DB
+    // 1. Estructurar el texto extraído en campos editables (IA + fallback heurístico)
+    const contenido = await estructurarCvTexto(data.extractedText);
+
+    // 2. Crear CV en DB con el contenido ya estructurado
     const { data: creado, error: errorInsert } = await context.supabase
       .from("resumes")
       .insert({
         user_id: context.userId,
         title: data.title,
         source_type: data.sourceType,
-        structured_json: { titular: "", perfil: "", experiencia: [] },
+        structured_json: contenido,
         extracted_text: data.extractedText,
       })
       .select("*")
@@ -179,7 +183,7 @@ export const crearCvDesdeUpload = createServerFn({ method: "POST" })
     if (errorInsert) throw new Error(errorInsert.message);
     const fila = creado as ResumeRow;
 
-    // 2. Subir archivo a Storage
+    // 3. Subir archivo a Storage
     const filePath = `${context.userId}/${fila.id}/${data.fileName}`;
     const fileUint8 = base64ToUint8Array(data.fileBase64);
 
@@ -196,7 +200,7 @@ export const crearCvDesdeUpload = createServerFn({ method: "POST" })
       throw new Error(`Error al subir archivo: ${errorUpload.message}`);
     }
 
-    // 3. Actualizar CV con file_path_original
+    // 4. Actualizar CV con file_path_original
     const { data: actualizado, error: errorUpdate } = await context.supabase
       .from("resumes")
       .update({ file_path_original: filePath })

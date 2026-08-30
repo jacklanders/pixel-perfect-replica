@@ -66,3 +66,30 @@ Reglas del JSON:
 - No inventes datos que no estén en el CV original o el perfil.
 - Si el CV está vacío o muy incompleto, sugerí un esqueleto profesional y preguntá qué datos quiere cargar.
 `.trim();
+
+export const PROMPT_STRUCTURE_CV = (textoExtraido: string) =>
+  `
+Estructurá el siguiente texto extraído de un currículum vitae y devolvé el resultado en JSON estricto.
+
+TEXTO EXTRAÍDO:
+${textoExtraido}
+
+Respondé ÚNICAMENTE con un JSON válido (sin markdown, sin bloques de código) con esta estructura exacta:
+{
+  "titular": "string (rubro/rol objetivo, máximo 200 caracteres)",
+  "perfil": "string (resumen profesional de 1-2 párrafos, máximo 3000 caracteres)",
+  "experiencia": [
+    {
+      "puesto": "string",
+      "empresa": "string",
+      "detalle": "string (logros y responsabilidades, máximo 2000 caracteres)"
+    }
+  ]
+}
+
+Reglas del JSON:
+- Extraé SOLO lo que exista en el texto: no inventes experiencias, puestos ni empresas.
+- Si no hay sección clara de experiencia, devolvé un array vacío.
+- Si el texto está vacío o es ilegible, devolvé todos los campos vacíos.
+- No incluyas datos sensibles (DNI, domicilios exactos, referencias).
+`.trim();
