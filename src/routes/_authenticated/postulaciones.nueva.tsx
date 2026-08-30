@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { AppShell } from "@/components/AppShell";
@@ -36,9 +36,17 @@ type CrearInput = {
   confidence: number;
   source_notes: string;
 };
-async function analizarVacante(rawText: string) {
+async function analizarVacante(rawText: string, imageBase64?: string, imageMimeType?: string) {
+  const textoBase =
+    rawText ||
+    (imageBase64
+      ? "Analizá la imagen adjunta: es un aviso de trabajo. Extraé los datos solicitados."
+      : "Extraé los datos de este aviso de trabajo.");
   return analizarVacanteConJack({
-    data: { raw_text: rawText },
+    data: {
+      raw_text: textoBase,
+      ...(imageBase64 ? { image_base64: imageBase64, image_mime_type: imageMimeType } : {}),
+    },
   } as unknown as Parameters<typeof analizarVacanteConJack>[0]);
 }
 
@@ -78,6 +86,8 @@ function NuevaPostulacion() {
   const [imagen, setImagen] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [extraido, setExtraido] = useState(false);
+  const [imagenFile, setImagenFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [datos, setDatos] = useState({
     role: "",
@@ -102,7 +112,22 @@ function NuevaPostulacion() {
   });
 
   const analizar = useMutation({
-    mutationFn: () => analizarVacante(texto),
+    mutationFn: async () => {
+      let imageBase64: string | undefined;
+      let imageMimeType: string | undefined;
+
+      if (imagenFile) {
+        imageBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(imagenFile);
+        });
+        imageMimeType = imagenFile.type;
+      }
+
+      return analizarVacante(texto, imageBase64, imageMimeType);
+    },
     onSuccess: (res) => {
       setDatos({
         role: res.role,
@@ -179,21 +204,46 @@ function NuevaPostulacion() {
             onDrop={(e) => {
               e.preventDefault();
               setDragging(false);
-              setImagen(e.dataTransfer.files[0]?.name ?? "captura-aviso.png");
+              const file = e.dataTransfer.files[0];
+              if (file) {
+                setImagen(file.name);
+                setImagenFile(file);
+              }
             }}
             className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
               dragging ? "border-primary bg-secondary" : "border-border"
             }`}
           >
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,application/pdf"
+              ref={fileInputRef}
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setImagen(file.name);
+                  setImagenFile(file);
+                }
+              }}
+            />
             <ImageUp className="size-6 text-muted-foreground" />
             <p className="text-sm font-medium">{imagen ?? "Arrastrá una captura del aviso acá"}</p>
+            {imagenFile && (
+              <p className="text-xs text-muted-foreground">
+                {imagenFile.name} · {(imagenFile.size / 1024).toFixed(0)} KB
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">PNG, JPG o PDF · Jack lee la imagen</p>
-            <Button variant="outline" size="sm" onClick={() => setImagen("captura-aviso.png")}>
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
               Seleccionar archivo
             </Button>
           </div>
 
-          <Button onClick={() => analizar.mutate()} disabled={!texto || analizar.isPending}>
+          <Button
+            onClick={() => analizar.mutate()}
+            disabled={(!texto && !imagenFile) || analizar.isPending}
+          >
             {analizar.isPending ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (

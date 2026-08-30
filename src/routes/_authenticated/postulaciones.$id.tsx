@@ -9,6 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertTriangle,
   Check,
@@ -21,6 +29,8 @@ import {
   Loader2,
   Save,
   Trash2,
+  Mail,
+  Unlink,
 } from "lucide-react";
 import {
   getApplicationById,
@@ -28,12 +38,14 @@ import {
   actualizarApplication,
   actualizarApplicationStatus,
   getUsoDiario,
+  enviarEmailGmail,
 } from "@/lib/application.functions";
 import { listarCvs } from "@/lib/cv.functions";
 import { getMiPerfil } from "@/lib/perfil.functions";
+import { verificarEstadoGmail, generarGmailAuthUrl, desconectarGmail } from "@/lib/oauth.functions";
 import { useAuth } from "@/hooks/useAuth";
 
-/* ─── Wrappers tipados para bypassar inferencia de TanStack Start v1.168 ─── */
+/* ─── Wrappers tipados ─── */
 type EnviarInput = {
   applicationId: string;
   generated_body?: string;
@@ -217,6 +229,8 @@ function DetallePostulacion() {
   const fetchUso = useServerFn(getUsoDiario);
   const fetchCvs = useServerFn(listarCvs);
   const fetchPerfil = useServerFn(getMiPerfil);
+  const fetchGmailStatus = useServerFn(verificarEstadoGmail);
+  const fetchGmailAuthUrl = useServerFn(generarGmailAuthUrl);
 
   const {
     data: app,
@@ -242,12 +256,20 @@ function DetallePostulacion() {
     queryFn: () => fetchPerfil(),
   });
 
-  /* ─── Estados locales de edición ─── */
+  const { data: gmailStatus, refetch: refetchGmail } = useQuery({
+    queryKey: ["gmail-status"],
+    queryFn: () => fetchGmailStatus(),
+  });
+
+  /* ─── Estados locales ─── */
   const [asuntoElegido, setAsuntoElegido] = useState<"generico" | "obligatorio">("generico");
   const [cuerpo, setCuerpo] = useState("");
   const [destino, setDestino] = useState("");
   const [cvId, setCvId] = useState("");
   const [firma, setFirma] = useState("");
+  const [includeCopy, setIncludeCopy] = useState(false);
+  const [showReconnectDialog, setShowReconnectDialog] = useState(false);
+  const [gmailError, setGmailError] = useState<string | null>(null);
 
   /* ─── Sincronizar con datos reales ─── */
   useEffect(() => {
@@ -291,6 +313,33 @@ function DetallePostulacion() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "Error al enviar"),
   });
 
+  const enviarGmail = useMutation({
+    mutationFn: () =>
+      enviarEmailGmail({
+        data: {
+          applicationId: id,
+          generated_body: cuerpo,
+          destination_email: destino,
+          generated_subject: asuntoActual,
+          includeCopy,
+        },
+      } as unknown as Parameters<typeof enviarEmailGmail>[0]),
+    onSuccess: () => {
+      toast.success("Postulación enviada por Gmail");
+      setGmailError(null);
+      void refetchGmail();
+    },
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Error al enviar por Gmail";
+      setGmailError(msg);
+      if (msg.includes("401") || msg.includes("Token expirado") || msg.includes("refresh")) {
+        setShowReconnectDialog(true);
+      } else {
+        toast.error(msg);
+      }
+    },
+  });
+
   const descartar = useMutation({
     mutationFn: () =>
       cambiarStatus({
@@ -301,6 +350,29 @@ function DetallePostulacion() {
     onSuccess: () => toast.success("Postulación descartada"),
     onError: (err) => toast.error(err instanceof Error ? err.message : "Error al descartar"),
   });
+
+  const desconectar = useMutation({
+    mutationFn: () =>
+      desconectarGmail({
+        data: undefined,
+      } as unknown as Parameters<typeof desconectarGmail>[0]),
+    onSuccess: () => {
+      toast.success("Gmail desconectado");
+      void refetchGmail();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Error al desconectar"),
+  });
+
+  /* ─── Conectar Gmail ─── */
+  const conectarGmail = async () => {
+    try {
+      const { url, state } = await fetchGmailAuthUrl();
+      sessionStorage.setItem("gmail_oauth_state", state);
+      window.location.href = url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al iniciar conexión con Gmail");
+    }
+  };
 
   if (isPending) {
     return (
@@ -325,6 +397,16 @@ function DetallePostulacion() {
     asuntoElegido === "obligatorio" && app.required_subject
       ? app.required_subject
       : app.generated_subject;
+
+  const isGmailConnected = gmailStatus?.connected ?? false;
+  const isSending = enviar.isPending || enviarGmail.isPending || guardar.isPending;
+
+  /* ─── Copiar todo ─── */
+  const copiarTodo = () => {
+    const bloque = `PARA: ${destino}\nASUNTO: ${asuntoActual}\n\n${cuerpo}\n\n--\n${firma}`;
+    void navigator.clipboard?.writeText(bloque);
+    toast.success("Todo copiado al portapapeles");
+  };
 
   return (
     <AppShell
@@ -396,6 +478,13 @@ function DetallePostulacion() {
           <CampoCopiable label="Cuerpo" value={cuerpo} multiline onChange={setCuerpo} />
           <CampoCopiable label="Firma" value={firma} multiline onChange={setFirma} />
 
+          {/* Botón Copiar todo */}
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={copiarTodo}>
+              <Copy className="size-3.5 mr-1" /> Copiar todo
+            </Button>
+          </div>
+
           {/* CV adjunto */}
           <div className="space-y-2">
             <Label className="flex items-center gap-1.5">
@@ -437,6 +526,17 @@ function DetallePostulacion() {
             </div>
           ) : null}
 
+          {/* Gmail error */}
+          {gmailError && !showReconnectDialog ? (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+              <p className="font-medium">Error al enviar por Gmail</p>
+              <p className="mt-1">{gmailError}</p>
+              <p className="mt-2 text-muted-foreground">
+                Usá los botones de copiar como alternativa.
+              </p>
+            </div>
+          ) : null}
+
           {/* Estado enviado / descartado / acciones */}
           {app.status === "sent" ? (
             <div className="flex items-center gap-2 rounded-xl border border-primary/30 bg-secondary p-4 text-sm">
@@ -449,28 +549,68 @@ function DetallePostulacion() {
               {app.discard_reason ? <p className="mt-1">{app.discard_reason}</p> : null}
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={() => guardar.mutate()} disabled={guardar.isPending}>
-                {guardar.isPending ? (
-                  <Loader2 className="size-4 animate-spin" />
+            <div className="space-y-4">
+              {/* Checkbox enviarme copia */}
+              {isGmailConnected ? (
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="include-copy"
+                    checked={includeCopy}
+                    onCheckedChange={(v) => setIncludeCopy(v === true)}
+                  />
+                  <Label htmlFor="include-copy" className="text-sm font-normal cursor-pointer">
+                    Enviarme copia (CCO)
+                  </Label>
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => guardar.mutate()} disabled={isSending}>
+                  {guardar.isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Save className="size-4" />
+                  )}
+                  Guardar cambios
+                </Button>
+
+                {/* Enviar desde Gmail */}
+                {isGmailConnected ? (
+                  <Button
+                    onClick={() => enviarGmail.mutate()}
+                    disabled={isSending || limiteAlcanzado}
+                  >
+                    {enviarGmail.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Mail className="size-4" />
+                    )}
+                    Enviar desde Gmail
+                  </Button>
                 ) : (
-                  <Save className="size-4" />
+                  <Button variant="outline" onClick={conectarGmail} disabled={isSending}>
+                    <Mail className="size-4" /> Conectar Gmail para enviar
+                  </Button>
                 )}
-                Guardar cambios
-              </Button>
-              <Button
-                onClick={() => enviar.mutate()}
-                disabled={enviar.isPending || limiteAlcanzado}
-              >
-                <Send className="size-4" /> Enviar postulación
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => descartar.mutate()}
-                disabled={descartar.isPending}
-              >
-                <Trash2 className="size-4" /> Descartar
-              </Button>
+
+                <Button variant="ghost" onClick={() => descartar.mutate()} disabled={isSending}>
+                  <Trash2 className="size-4" /> Descartar
+                </Button>
+              </div>
+
+              {/* Desconectar Gmail (solo si conectado) */}
+              {isGmailConnected ? (
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={() => desconectar.mutate()}
+                  disabled={desconectar.isPending}
+                >
+                  <Unlink className="size-3 mr-1" />
+                  Desconectar Gmail
+                </Button>
+              ) : null}
             </div>
           )}
         </section>
@@ -535,6 +675,27 @@ function DetallePostulacion() {
           </div>
         </section>
       </div>
+
+      {/* ─── Dialog: Reconectar Gmail ─── */}
+      <Dialog open={showReconnectDialog} onOpenChange={setShowReconnectDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reconectar Gmail</DialogTitle>
+            <DialogDescription>
+              Tu autorización con Gmail expiró o fue revocada. Volvé a conectar tu cuenta para
+              seguir enviando postulaciones directamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 pt-2">
+            <Button onClick={conectarGmail}>
+              <Mail className="size-4 mr-2" /> Reconectar Gmail
+            </Button>
+            <Button variant="outline" onClick={() => setShowReconnectDialog(false)}>
+              Cancelar — usar copiar/pegar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

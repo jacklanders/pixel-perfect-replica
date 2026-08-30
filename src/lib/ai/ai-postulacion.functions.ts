@@ -19,13 +19,21 @@ const extractedVacanteSchema = z.object({
 /* ─── 1. Extraer datos del aviso con IA ─── */
 export const analizarVacanteConJack = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: unknown) => z.object({ raw_text: z.string().min(1) }).parse(input))
+  .validator((input: unknown) =>
+    z
+      .object({
+        raw_text: z.string().min(1),
+        image_base64: z.string().optional(),
+        image_mime_type: z.string().optional(),
+      })
+      .parse(input),
+  )
   .handler(async ({ data }) => {
     const provider = createAIProvider();
 
     const prompt = `Sos Jack, un asistente de IA especializado en avisos de trabajo de Argentina.
 
-Extraé los datos de este aviso y devolvé UN SOLO objeto JSON válido (sin markdown, sin bloques de código, sin explicaciones adicionales):
+Extraé los datos de este aviso${data.image_base64 ? " (que está en la imagen adjunta)" : ""} y devolvé UN SOLO objeto JSON válido (sin markdown, sin bloques de código, sin explicaciones adicionales):
 
 {
   "role": "título exacto del puesto",
@@ -43,11 +51,17 @@ Extraé los datos de este aviso y devolvé UN SOLO objeto JSON válido (sin mark
 Aviso:
 ${data.raw_text}`;
 
+    const images =
+      data.image_base64 && data.image_mime_type
+        ? [{ mimeType: data.image_mime_type, data: data.image_base64 }]
+        : undefined;
+
     const response = await provider.generate({
       system:
         "Sos Jack, un asistente de IA especializado en avisos de trabajo de Argentina. Respondé ÚNICAMENTE con el JSON solicitado, sin markdown ni explicaciones.",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
+      ...(images ? { images } : {}),
     });
 
     const cleaned = response.content

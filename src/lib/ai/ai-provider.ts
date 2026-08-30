@@ -11,12 +11,25 @@ export interface AIResponse {
   usage?: { inputTokens: number; outputTokens: number };
 }
 
+export interface AIMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AIImage {
+  mimeType: string;
+  data: string; // base64 sin header data:...
+}
+
+export interface GenerateOptions {
+  system: string;
+  messages: AIMessage[];
+  temperature?: number;
+  images?: AIImage[];
+}
+
 export interface AIProvider {
-  generate(options: {
-    system: string;
-    messages: Array<{ role: "user" | "assistant"; content: string }>;
-    temperature?: number;
-  }): Promise<AIResponse>;
+  generate(options: GenerateOptions): Promise<AIResponse>;
 }
 
 function getEnv(key: string): string | undefined {
@@ -27,13 +40,13 @@ function getEnv(key: string): string | undefined {
   }
 }
 
+function stripBase64Header(base64: string): string {
+  return base64.replace(/^data:[^;,]+;base64,/, "");
+}
+
 // ─── Mock Provider para tests E2E ───
 class MockAIProvider implements AIProvider {
-  async generate(options: {
-    system: string;
-    messages: Array<{ role: "user" | "assistant"; content: string }>;
-    temperature?: number;
-  }): Promise<AIResponse> {
+  async generate(options: GenerateOptions): Promise<AIResponse> {
     const last = options.messages.at(-1)?.content ?? "";
     if (last.includes("aviso") || last.includes("puesto") || last.includes("trabajo")) {
       return {
@@ -63,28 +76,51 @@ class MockAIProvider implements AIProvider {
   }
 }
 
-// Gemini Provider
+// Gemini Provider (multimodal)
 class GeminiProvider implements AIProvider {
   private apiKey: string;
-  private model = "gemini-2.0-flash";
+  private model = "gemini-3.6-flash";
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
   }
 
-  async generate(options: {
-    system: string;
-    messages: Array<{ role: "user" | "assistant"; content: string }>;
-    temperature?: number;
-  }): Promise<AIResponse> {
-    const contents = options.messages.map((m) => ({
-      role: m.role === "user" ? "user" : "model",
-      parts: [{ text: m.content }],
-    }));
+  async generate(options: GenerateOptions): Promise<AIResponse> {
+    const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+
+    // Texto del último mensaje de usuario
+    let lastUserMsg: AIMessage | undefined;
+    for (let i = options.messages.length - 1; i >= 0; i--) {
+      if (options.messages[i]!.role === "user") {
+        lastUserMsg = options.messages[i];
+        break;
+      }
+    }
+
+    // Texto de la instrucción + imágenes en la misma entrada de usuario
+    if (lastUserMsg?.content) {
+      parts.push({ text: lastUserMsg.content });
+    }
+    for (const img of options.images ?? []) {
+      parts.push({
+        inlineData: {
+          mimeType: img.mimeType,
+          data: stripBase64Header(img.data),
+        },
+      });
+    }
+
+    // Mensajes previos (sin imágenes, Gemini no soporta historial multimodal fácil)
+    const history = options.messages
+      .filter((m) => m !== lastUserMsg)
+      .map((m) => ({
+        role: m.role === "user" ? "user" : "model",
+        parts: [{ text: m.content }],
+      }));
 
     const body = {
       systemInstruction: { parts: [{ text: options.system }] },
-      contents,
+      contents: [...history, { role: "user", parts }],
       generationConfig: {
         temperature: options.temperature ?? 0.7,
         maxOutputTokens: 4096,
@@ -139,11 +175,32 @@ class AnthropicProvider implements AIProvider {
     this.apiKey = apiKey;
   }
 
-  async generate(options: {
-    system: string;
-    messages: Array<{ role: "user" | "assistant"; content: string }>;
-    temperature?: number;
-  }): Promise<AIResponse> {
+  async generate(options: GenerateOptions): Promise<AIResponse> {
+    const messages = options.messages.map((m) => {
+      if (m.role === "user" && options.images && options.images.length > 0) {
+        // Solo el último mensaje de usuario lleva imágenes
+        const content: Array<
+          | { type: "text"; text: string }
+          | {
+              type: "image";
+              source: { type: "base64"; media_type: string; data: string };
+            }
+        > = [{ type: "text", text: m.content }];
+        for (const img of options.images) {
+          content.push({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: img.mimeType,
+              data: stripBase64Header(img.data),
+            },
+          });
+        }
+        return { role: m.role, content };
+      }
+      return { role: m.role, content: m.content };
+    });
+
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -156,10 +213,7 @@ class AnthropicProvider implements AIProvider {
         max_tokens: 4096,
         temperature: options.temperature ?? 0.7,
         system: options.system,
-        messages: options.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
+        messages,
       }),
     });
 
