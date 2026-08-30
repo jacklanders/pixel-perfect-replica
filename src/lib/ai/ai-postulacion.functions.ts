@@ -2,145 +2,127 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
 import { createAIProvider } from "./ai-provider";
-import {
-  PROMPT_JOB_REQUIREMENT_ANALYSIS,
-  PROMPT_APPLICATION_EMAIL_GENERATION,
-} from "./prompts-postulacion";
 
-const VacanteExtraidaSchema = z.object({
+const extractedVacanteSchema = z.object({
   role: z.string().min(1),
   company: z.string().min(1),
-  location: z.string().min(1),
-  destinationEmail: z.string().email(),
-  mandatorySubject: z.string().nullable(),
-  requirementsRequired: z.array(z.string()),
-  requirementsPreferred: z.array(z.string()),
-  closingDate: z.string().nullable(),
-  sourceNotes: z.string(),
-  confidence: z.enum(["high", "medium", "low"]),
+  location: z.string().nullable(),
+  destination_email: z.string().email().nullable(),
+  mandatory_subject: z.string().nullable(),
+  requirements_required: z.array(z.string()),
+  requirements_preferred: z.array(z.string()),
+  closing_date: z.string().nullable(),
+  source_notes: z.string(),
+  confidence: z.number().min(0).max(1),
 });
 
-const EmailGeneradoSchema = z.object({
-  asunto: z.string().min(1),
-  cuerpo: z.string().min(1),
-  advertencias: z.array(z.string()),
-  preguntas: z.array(z.string()),
-  cumpleRequisitos: z.boolean(),
-});
-
+/* ─── 1. Extraer datos del aviso con IA ─── */
 export const analizarVacanteConJack = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator(
-    z.object({
-      textoVacante: z.string().min(10),
-    }),
-  )
+  .validator((input: unknown) => z.object({ raw_text: z.string().min(1) }).parse(input))
   .handler(async ({ data }) => {
     const provider = createAIProvider();
+
+    const prompt = `Sos Jack, un asistente de IA especializado en avisos de trabajo de Argentina.
+
+Extraé los datos de este aviso y devolvé UN SOLO objeto JSON válido (sin markdown, sin bloques de código, sin explicaciones adicionales):
+
+{
+  "role": "título exacto del puesto",
+  "company": "nombre de la empresa",
+  "location": "ubicación o modalidad",
+  "destination_email": "email de contacto para enviar CV",
+  "mandatory_subject": "asunto obligatorio exacto si lo pide el aviso, o null",
+  "requirements_required": ["requisito excluyente 1", "requisito excluyente 2"],
+  "requirements_preferred": ["requisito deseable 1"],
+  "closing_date": "YYYY-MM-DD o null",
+  "source_notes": "notas breves sobre el aviso",
+  "confidence": 0.0-1.0
+}
+
+Aviso:
+${data.raw_text}`;
+
     const response = await provider.generate({
-      system: PROMPT_JOB_REQUIREMENT_ANALYSIS,
-      messages: [{ role: "user", content: data.textoVacante }],
+      system:
+        "Sos Jack, un asistente de IA especializado en avisos de trabajo de Argentina. Respondé ÚNICAMENTE con el JSON solicitado, sin markdown ni explicaciones.",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2,
     });
 
-    const parsed = JSON.parse(response.content);
-    const result = VacanteExtraidaSchema.parse(parsed);
-    return result;
-  });
+    const cleaned = response.content
+      .replace(/```json\s?/gi, "")
+      .replace(/```/g, "")
+      .trim();
 
-export const generarEmailPostulacionConJack = createServerFn({
-  method: "POST",
-})
-  .middleware([requireSupabaseAuth])
-  .validator(
-    z.object({
-      jobPostId: z.string(),
-      perfil: z.object({
-        nombre: z.string(),
-        rubro: z.string(),
-        experiencia: z.string(),
-        skills: z.string(),
-        firma: z.string(),
-      }),
-      cvResumen: z.string().optional(),
-    }),
-  )
-  .handler(async ({ data, context }) => {
-    // 1. Traer la vacante
-    const { data: jobPost, error: errJob } = await context.supabase
-      .from("job_posts")
-      .select("*")
-      .eq("id", data.jobPostId)
-      .eq("user_id", context.userId)
-      .single();
-
-    if (errJob || !jobPost) throw new Error("Vacante no encontrada");
-
-    const extracted = jobPost.extracted_json as Record<string, unknown> | null;
-    if (!extracted) throw new Error("La vacante no tiene datos extraídos");
-
-    // 2. Armar el mensaje con perfil + vacante
-    const perfilContexto = `
-PERFIL DEL USUARIO:
-- Nombre: ${data.perfil.nombre}
-- Rubro: ${data.perfil.rubro}
-- Experiencia: ${data.perfil.experiencia}
-- Skills: ${data.perfil.skills}
-- Firma: ${data.perfil.firma}
-${data.cvResumen ? `- Resumen CV: ${data.cvResumen}` : ""}
-
-VACANTE:
-- Puesto: ${extracted["role"] ?? "No especificado"}
-- Empresa: ${extracted["company"] ?? "No especificada"}
-- Requisitos excluyentes: ${JSON.stringify(extracted["requirementsRequired"] ?? [])}
-- Requisitos deseables: ${JSON.stringify(extracted["requirementsPreferred"] ?? [])}
-`;
-
-    const provider = createAIProvider();
-    const response = await provider.generate({
-      system: PROMPT_APPLICATION_EMAIL_GENERATION,
-      messages: [{ role: "user", content: perfilContexto }],
-    });
-
-    const parsed = JSON.parse(response.content);
-    const result = EmailGeneradoSchema.parse(parsed);
-
-    // 3. Si no cumple requisitos, NO guardamos nada
-    if (!result.cumpleRequisitos) {
-      return {
-        ok: false,
-        advertencias: result.advertencias,
-        preguntas: result.preguntas,
-        asunto: null,
-        cuerpo: null,
-      };
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      throw new Error(
+        "La IA no devolvió un JSON válido. Intentá de nuevo o pegá el aviso con mejor formato.",
+      );
     }
 
-    // 4. Guardar la application en estado pending
-    const { data: appRow, error: errApp } = await context.supabase
+    return extractedVacanteSchema.parse(parsed);
+  });
+
+/* ─── 2. Crear job_post + application en DB ─── */
+export const crearVacanteYPostulacion = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        role: z.string().min(1),
+        company: z.string().min(1),
+        location: z.string().nullable(),
+        destination_email: z.string().email().nullable(),
+        mandatory_subject: z.string().nullable(),
+        raw_text: z.string().min(1),
+        source_type: z.enum(["text", "image", "url"]),
+        closing_date: z.string().nullable(),
+        resume_id: z.string().uuid(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    // 1. Crear job_post
+    const { data: jobPost, error: errJob } = await context.supabase
+      .from("job_posts")
+      .insert({
+        user_id: context.userId,
+        source_type: data.source_type,
+        raw_text: data.raw_text,
+        employer: data.company,
+        role: data.role,
+        location: data.location,
+        closing_at: data.closing_date,
+        extracted_json: {
+          mandatory_subject: data.mandatory_subject,
+        },
+      })
+      .select()
+      .single();
+
+    if (errJob) throw new Error(errJob.message);
+
+    // 2. Crear application vinculada
+    const { data: app, error: errApp } = await context.supabase
       .from("applications")
       .insert({
         user_id: context.userId,
-        job_post_id: data.jobPostId,
-        resume_id: null,
+        resume_id: data.resume_id,
+        job_post_id: jobPost.id,
         status: "pending",
-        generated_subject: result.asunto,
-        required_subject: (extracted["mandatorySubject"] as string) || null,
-        generated_body: result.cuerpo,
-        destination_email: String(extracted["destinationEmail"] ?? ""),
+        generated_subject: `Postulación — ${data.role}`,
+        required_subject: data.mandatory_subject,
+        generated_body: "",
+        destination_email: data.destination_email,
       })
       .select()
       .single();
 
     if (errApp) throw new Error(errApp.message);
 
-    return {
-      ok: true,
-      applicationId: appRow.id,
-      asunto: result.asunto,
-      cuerpo: result.cuerpo,
-      advertencias: result.advertencias,
-      preguntas: result.preguntas,
-      requiredSubject: (extracted["mandatorySubject"] as string) || null,
-      destinationEmail: String(extracted["destinationEmail"] ?? ""),
-    };
+    return { applicationId: app.id, jobPostId: jobPost.id };
   });

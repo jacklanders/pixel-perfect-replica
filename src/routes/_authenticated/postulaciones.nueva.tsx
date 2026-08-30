@@ -1,13 +1,49 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ImageUp, Sparkles, Wand2, AlertTriangle } from "lucide-react";
-import { crearPostulacion } from "@/lib/mock-postulaciones";
+import { ImageUp, Sparkles, Wand2, AlertTriangle, Loader2, FileText, Check } from "lucide-react";
+import {
+  analizarVacanteConJack,
+  crearVacanteYPostulacion,
+} from "@/lib/ai/ai-postulacion.functions";
+import { listarCvs } from "@/lib/cv.functions";
+
+/* ─── Wrappers tipados: bypass al bug de inferencia de TanStack Start ───
+   El runtime espera { data: { ... } } cuando hay middleware+validator.
+   V1.168 no infiere esto correctamente en el cliente, así que tipamos
+   manualmente y forzamos con 'satisfies'. El servidor sigue validando
+   con Zod exactamente igual. */
+type AnalizarInput = { raw_text: string };
+type CrearInput = {
+  role: string;
+  company: string;
+  location: string | null;
+  destination_email: string | null;
+  mandatory_subject: string | null;
+  raw_text: string;
+  source_type: "text" | "image" | "url";
+  closing_date: string | null;
+  resume_id: string;
+};
+
+async function analizarVacante(rawText: string) {
+  return analizarVacanteConJack({
+    data: { raw_text: rawText },
+  } as unknown as Parameters<typeof analizarVacanteConJack>[0]);
+}
+
+async function crearVacante(payload: CrearInput) {
+  return crearVacanteYPostulacion({
+    data: payload,
+  } as unknown as Parameters<typeof crearVacanteYPostulacion>[0]);
+}
 
 export const Route = createFileRoute("/_authenticated/postulaciones/nueva")({
   head: () => ({
@@ -39,22 +75,66 @@ function NuevaPostulacion() {
   const [imagen, setImagen] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [extraido, setExtraido] = useState(false);
+
   const [datos, setDatos] = useState({
-    puesto: "Ejecutiva de cuentas corporativas",
-    empresa: "Naranja X",
-    ubicacion: "Corrientes (híbrido)",
-    mailContacto: "seleccion@naranjax.com",
+    role: "",
+    company: "",
+    location: "",
+    destination_email: "",
+    mandatory_subject: "",
+    closing_date: "",
+    confidence: 0,
   });
 
-  const extraer = () => setExtraido(true);
+  const [requisitos, setRequisitos] = useState<string[]>([]);
+  const [cvId, setCvId] = useState<string>("");
 
-  const generar = () => {
-    const id = crearPostulacion({
-      ...datos,
-      fuente: imagen ? "Imagen del aviso" : "Texto pegado",
-    });
-    void navigate({ to: "/postulaciones/$id", params: { id } });
-  };
+  const fetchCvs = useServerFn(listarCvs);
+
+  const { data: cvs, isPending: cvsPending } = useQuery({
+    queryKey: ["mis-cvs"],
+    queryFn: () => fetchCvs(),
+  });
+
+  const analizar = useMutation({
+    mutationFn: () => analizarVacante(texto),
+    onSuccess: (res) => {
+      setDatos({
+        role: res.role,
+        company: res.company,
+        location: res.location ?? "",
+        destination_email: res.destination_email ?? "",
+        mandatory_subject: res.mandatory_subject ?? "",
+        closing_date: res.closing_date ?? "",
+        confidence: res.confidence,
+      });
+      setRequisitos(res.requirements_required);
+      setExtraido(true);
+    },
+  });
+
+  const crear = useMutation({
+    mutationFn: () =>
+      crearVacante({
+        role: datos.role,
+        company: datos.company,
+        location: datos.location || null,
+        destination_email: datos.destination_email || null,
+        mandatory_subject: datos.mandatory_subject || null,
+        raw_text: texto,
+        source_type: imagen ? "image" : "text",
+        closing_date: datos.closing_date || null,
+        resume_id: cvId,
+      }),
+    onSuccess: (res) => {
+      void navigate({
+        to: "/postulaciones/$id",
+        params: { id: res.applicationId },
+      });
+    },
+  });
+
+  const puedeGenerar = extraido && cvId && !crear.isPending;
 
   return (
     <AppShell
@@ -62,6 +142,7 @@ function NuevaPostulacion() {
       subtitle="Pegá el texto del aviso o subí una captura. Jack extrae los datos y arma el mail."
     >
       <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+        {/* ─── Panel izquierdo: entrada ─── */}
         <section className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-soft">
           <div className="space-y-2">
             <Label htmlFor="aviso">Texto del aviso</Label>
@@ -100,11 +181,25 @@ function NuevaPostulacion() {
             </Button>
           </div>
 
-          <Button onClick={extraer} disabled={!texto && !imagen}>
-            <Wand2 className="size-4" /> Extraer datos con Jack
+          <Button onClick={() => analizar.mutate()} disabled={!texto || analizar.isPending}>
+            {analizar.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Wand2 className="size-4" />
+            )}
+            Extraer datos con Jack
           </Button>
+
+          {analizar.isError ? (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+              {analizar.error instanceof Error
+                ? analizar.error.message
+                : "Error al analizar el aviso. Intentá de nuevo."}
+            </div>
+          ) : null}
         </section>
 
+        {/* ─── Panel derecho: datos extraídos ─── */}
         <section className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-soft">
           <div className="flex items-center gap-2">
             <Sparkles className="size-4 text-accent" />
@@ -122,74 +217,127 @@ function NuevaPostulacion() {
                   <Label htmlFor="puesto">Puesto</Label>
                   <Input
                     id="puesto"
-                    value={datos.puesto}
-                    onChange={(e) => setDatos({ ...datos, puesto: e.target.value })}
+                    value={datos.role}
+                    onChange={(e) => setDatos({ ...datos, role: e.target.value })}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="empresa">Empresa</Label>
                   <Input
                     id="empresa"
-                    value={datos.empresa}
-                    onChange={(e) => setDatos({ ...datos, empresa: e.target.value })}
+                    value={datos.company}
+                    onChange={(e) => setDatos({ ...datos, company: e.target.value })}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="ubicacion">Ubicación</Label>
                   <Input
                     id="ubicacion"
-                    value={datos.ubicacion}
-                    onChange={(e) => setDatos({ ...datos, ubicacion: e.target.value })}
+                    value={datos.location}
+                    onChange={(e) => setDatos({ ...datos, location: e.target.value })}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="mail">Mail de contacto</Label>
                   <Input
                     id="mail"
-                    value={datos.mailContacto}
-                    onChange={(e) => setDatos({ ...datos, mailContacto: e.target.value })}
+                    value={datos.destination_email}
+                    onChange={(e) =>
+                      setDatos({
+                        ...datos,
+                        destination_email: e.target.value,
+                      })
+                    }
                   />
                 </div>
               </div>
 
-              <div className="rounded-xl border border-border p-4">
-                <p className="text-sm font-medium">Requisitos excluyentes</p>
-                <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
-                  <li>3+ años en gestión de cuentas — cumplís</li>
-                  <li>Manejo de CRM — cumplís</li>
-                  <li>Vehículo propio — falta confirmar</li>
-                </ul>
-              </div>
-
-              <div className="rounded-xl border border-accent/40 bg-accent/10 p-4">
-                <p className="flex items-center gap-2 text-sm font-medium">
-                  <AlertTriangle className="size-4 text-accent" />
-                  Jack necesita una confirmación
-                </p>
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  El aviso pide vehículo propio. ¿Contás con uno? No lo asumo: según lo que me digas
-                  redacto el mail con honestidad y en positivo.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline">
-                    Sí, tengo
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    No tengo
-                  </Button>
-                  <Button size="sm" variant="ghost">
-                    Descartar esta vacante
-                  </Button>
+              {requisitos.length > 0 ? (
+                <div className="rounded-xl border border-border p-4">
+                  <p className="text-sm font-medium">Requisitos detectados</p>
+                  <ul className="mt-2 space-y-1.5 text-sm text-muted-foreground">
+                    {requisitos.map((r) => (
+                      <li key={r}>• {r}</li>
+                    ))}
+                  </ul>
                 </div>
+              ) : null}
+
+              {datos.confidence < 0.7 ? (
+                <div className="rounded-xl border border-accent/40 bg-accent/10 p-4">
+                  <p className="flex items-center gap-2 text-sm font-medium">
+                    <AlertTriangle className="size-4 text-accent" />
+                    Revisá los datos extraídos
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Jack no está 100% seguro de la extracción. Verificá y corregí antes de
+                    continuar.
+                  </p>
+                </div>
+              ) : null}
+
+              {datos.closing_date ? (
+                <Badge variant="secondary" className="rounded-full px-3 py-1">
+                  Aviso vigente hasta el {new Date(datos.closing_date).toLocaleDateString("es-AR")}
+                </Badge>
+              ) : null}
+
+              {/* Selector de CV */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5">
+                  <FileText className="size-3.5" /> CV para adjuntar
+                </Label>
+                {cvsPending ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-3.5 animate-spin" /> Cargando CVs…
+                  </div>
+                ) : !cvs || cvs.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+                    No tenés CVs guardados.{" "}
+                    <Button variant="link" size="sm" asChild className="h-auto p-0">
+                      <a href="/cv">Creá uno primero</a>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="grid gap-2">
+                    {cvs.map((cv) => (
+                      <button
+                        key={cv.id}
+                        type="button"
+                        onClick={() => setCvId(cv.id)}
+                        className={`flex items-center justify-between rounded-lg border p-3 text-left text-sm transition-colors ${
+                          cvId === cv.id
+                            ? "border-primary bg-secondary"
+                            : "border-border hover:bg-muted"
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <FileText className="size-4" />
+                          {cv.title}
+                        </span>
+                        {cvId === cv.id ? <Check className="size-4 text-primary" /> : null}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <Badge variant="secondary" className="rounded-full px-3 py-1">
-                Aviso vigente hasta el 22/08/2026
-              </Badge>
-
-              <Button className="w-full" onClick={generar}>
-                <Sparkles className="size-4" /> Generar postulación
+              <Button className="w-full" onClick={() => crear.mutate()} disabled={!puedeGenerar}>
+                {crear.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Sparkles className="size-4" />
+                )}
+                Generar postulación
               </Button>
+
+              {crear.isError ? (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                  {crear.error instanceof Error
+                    ? crear.error.message
+                    : "Error al guardar la postulación. Intentá de nuevo."}
+                </div>
+              ) : null}
             </>
           )}
         </section>
