@@ -152,6 +152,10 @@ npx wrangler login                              # autorización única en el bro
 npx nitro deploy --prebuilt                     # deploy a https://<nombre>.workers.dev
 ```
 
+> El nombre del worker se define en `wrangler.json` (raíz); el subdominio de la cuenta se
+> registra una vez en el dashboard (Workers & Pages → "Your subdomain"). Deployment actual:
+> **https://app.postulaya-jack.workers.dev**
+
 Luego, en Cloudflare Dashboard → tu worker → **Settings → Variables and Secrets**, o vía CLI:
 
 ```sh
