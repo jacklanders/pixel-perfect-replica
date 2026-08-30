@@ -2,6 +2,8 @@
  * Capa AIProvider desacoplada.
  * Soporta AI_PROVIDER=gemini (desarrollo/pruebas) y anthropic (producción).
  * Las API keys se leen de process.env en server-side únicamente.
+ *
+ * Modo MOCK_AI: activar con MOCK_AI=true para tests E2E sin llamadas reales a IA.
  */
 
 export interface AIResponse {
@@ -22,6 +24,42 @@ function getEnv(key: string): string | undefined {
     return process.env[key];
   } catch {
     return undefined;
+  }
+}
+
+// ─── Mock Provider para tests E2E ───
+class MockAIProvider implements AIProvider {
+  async generate(options: {
+    system: string;
+    messages: Array<{ role: "user" | "assistant"; content: string }>;
+    temperature?: number;
+  }): Promise<AIResponse> {
+    const last = options.messages.at(-1)?.content ?? "";
+    if (last.includes("aviso") || last.includes("puesto") || last.includes("trabajo")) {
+      return {
+        content: JSON.stringify({
+          role: "Ejecutivo/a de cuentas corporativas",
+          company: "Naranja X",
+          location: "Corrientes (híbrido)",
+          destination_email: "seleccion@naranjax.com",
+          mandatory_subject: "REF-4471 ECC Corrientes",
+          requirements_required: [
+            "3+ años en gestión de cuentas",
+            "manejo de CRM",
+            "vehículo propio",
+          ],
+          requirements_preferred: ["experiencia en sector financiero"],
+          closing_date: "2026-12-31",
+          source_notes: "Aviso extraído para test E2E",
+          confidence: 0.95,
+        }),
+        usage: { inputTokens: 120, outputTokens: 80 },
+      };
+    }
+    return {
+      content: "Respuesta mock de Jack para tests.",
+      usage: { inputTokens: 10, outputTokens: 10 },
+    };
   }
 }
 
@@ -147,7 +185,12 @@ class AnthropicProvider implements AIProvider {
   }
 }
 
+// ─── Factory ───
 export function createAIProvider(): AIProvider {
+  if (getEnv("MOCK_AI") === "true") {
+    return new MockAIProvider();
+  }
+
   const provider = getEnv("AI_PROVIDER") ?? "gemini";
 
   if (provider === "gemini") {

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase/client";
 
 export const Route = createFileRoute("/auth/callback")({
@@ -9,15 +9,19 @@ export const Route = createFileRoute("/auth/callback")({
 function AuthCallback() {
   const navigate = useNavigate();
   const [status, setStatus] = useState("Procesando login…");
+  const handled = useRef(false);
 
   useEffect(() => {
+    if (handled.current) return;
+    handled.current = true;
+
     const handleAuth = async () => {
       const url = new URL(window.location.href);
       const code = url.searchParams.get("code");
-      const error = url.searchParams.get("error");
+      const errorParam = url.searchParams.get("error");
 
-      if (error) {
-        console.error("[auth] OAuth error:", error);
+      if (errorParam) {
+        console.error("[auth] OAuth error:", errorParam);
         navigate({ to: "/login", search: { error: "auth_fallo" } });
         return;
       }
@@ -27,34 +31,42 @@ function AuthCallback() {
         return;
       }
 
-      // El cliente SSR de Supabase puede haber ya intercambiado el código automáticamente.
-      // Verificamos si ya hay sesión antes de intentar el exchange manual.
+      // 1. Si ya hay sesión (intercambio automático), redirigir directo
       const {
-        data: { session },
+        data: { session: existingSession },
       } = await supabase.auth.getSession();
 
-      if (session) {
+      if (existingSession) {
         navigate({ to: "/perfil" });
         return;
       }
 
+      // 2. Intercambiar código por sesión
       const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
-      if (exchangeError) {
-        console.error("[auth] Exchange failed:", exchangeError.message);
-        setStatus("Error al procesar el login. Redirigiendo…");
-        setTimeout(() => {
-          navigate({ to: "/login", search: { error: "auth_fallo" } });
-        }, 2000);
-      } else {
+      if (!exchangeError) {
         setStatus("¡Listo! Redirigiendo…");
-        setTimeout(() => {
-          navigate({ to: "/perfil" });
-        }, 500);
+        setTimeout(() => navigate({ to: "/perfil" }), 300);
+        return;
       }
+
+      // 3. Si falló, verificar una última vez (race condition / otro tab)
+      const {
+        data: { session: sessionAfter },
+      } = await supabase.auth.getSession();
+
+      if (sessionAfter) {
+        navigate({ to: "/perfil" });
+        return;
+      }
+
+      // 4. Solo si definitivamente no hay sesión, mostrar error
+      console.error("[auth] Exchange failed:", exchangeError.message);
+      setStatus("Error al procesar el login. Redirigiendo…");
+      setTimeout(() => navigate({ to: "/login", search: { error: "auth_fallo" } }), 2000);
     };
 
-    handleAuth();
+    void handleAuth();
   }, [navigate]);
 
   return (
