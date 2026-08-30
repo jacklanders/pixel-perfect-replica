@@ -91,3 +91,22 @@ export function normalizarContenidoCv(value: Json | null | undefined): CvConteni
       })),
   };
 }
+
+// ─── OAuth (Gmail) ───
+export interface OAuthConnectionRow {
+  user_id: string;
+  provider: string;
+  encrypted_access_token: string | null;
+  encrypted_refresh_token: string | null;
+  scopes: string[];
+  connected_at: string;
+  revoked_at: string | null;
+  expires_at: string | null;
+}
+
+export interface OAuthConnectionStatusRow {
+  user_id: string;
+  provider: string;
+  connected: boolean;
+  updated_at: string;
+}

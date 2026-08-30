@@ -17,6 +17,7 @@ import { Route as AuthenticatedMisCvRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedPerfilRouteImport } from './routes/_authenticated/perfil'
 import { Route as AuthenticatedPostulacionesRouteImport } from './routes/_authenticated/postulaciones'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AuthGmailCallbackRouteImport } from './routes/auth.gmail-callback'
 import { Route as AuthenticatedPostulacionesIndexRouteImport } from './routes/_authenticated/postulaciones.index'
 import { Route as AuthenticatedPostulacionesIdRouteImport } from './routes/_authenticated/postulaciones.$id'
 import { Route as AuthenticatedPostulacionesNuevaRouteImport } from './routes/_authenticated/postulaciones.nueva'
@@ -61,6 +62,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthGmailCallbackRoute = AuthGmailCallbackRouteImport.update({
+  id: '/auth/gmail-callback',
+  path: '/auth/gmail-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedPostulacionesIndexRoute =
   AuthenticatedPostulacionesIndexRouteImport.update({
     id: '/',
@@ -88,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/perfil': typeof AuthenticatedPerfilRoute
   '/postulaciones': typeof AuthenticatedPostulacionesRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/gmail-callback': typeof AuthGmailCallbackRoute
   '/postulaciones/$id': typeof AuthenticatedPostulacionesIdRoute
   '/postulaciones/nueva': typeof AuthenticatedPostulacionesNuevaRoute
   '/postulaciones/': typeof AuthenticatedPostulacionesIndexRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/mis-cv': typeof AuthenticatedMisCvRoute
   '/perfil': typeof AuthenticatedPerfilRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/gmail-callback': typeof AuthGmailCallbackRoute
   '/postulaciones/$id': typeof AuthenticatedPostulacionesIdRoute
   '/postulaciones/nueva': typeof AuthenticatedPostulacionesNuevaRoute
   '/postulaciones': typeof AuthenticatedPostulacionesIndexRoute
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/_authenticated/perfil': typeof AuthenticatedPerfilRoute
   '/_authenticated/postulaciones': typeof AuthenticatedPostulacionesRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/gmail-callback': typeof AuthGmailCallbackRoute
   '/_authenticated/postulaciones/$id': typeof AuthenticatedPostulacionesIdRoute
   '/_authenticated/postulaciones/nueva': typeof AuthenticatedPostulacionesNuevaRoute
   '/_authenticated/postulaciones/': typeof AuthenticatedPostulacionesIndexRoute
@@ -127,6 +136,7 @@ export interface FileRouteTypes {
     | '/perfil'
     | '/postulaciones'
     | '/auth/callback'
+    | '/auth/gmail-callback'
     | '/postulaciones/$id'
     | '/postulaciones/nueva'
     | '/postulaciones/'
@@ -138,6 +148,7 @@ export interface FileRouteTypes {
     | '/mis-cv'
     | '/perfil'
     | '/auth/callback'
+    | '/auth/gmail-callback'
     | '/postulaciones/$id'
     | '/postulaciones/nueva'
     | '/postulaciones'
@@ -151,6 +162,7 @@ export interface FileRouteTypes {
     | '/_authenticated/perfil'
     | '/_authenticated/postulaciones'
     | '/auth/callback'
+    | '/auth/gmail-callback'
     | '/_authenticated/postulaciones/$id'
     | '/_authenticated/postulaciones/nueva'
     | '/_authenticated/postulaciones/'
@@ -161,6 +173,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  AuthGmailCallbackRoute: typeof AuthGmailCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -219,6 +232,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/callback'
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/gmail-callback': {
+      id: '/auth/gmail-callback'
+      path: '/auth/gmail-callback'
+      fullPath: '/auth/gmail-callback'
+      preLoaderRoute: typeof AuthGmailCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/postulaciones/': {
@@ -285,6 +305,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   LoginRoute: LoginRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  AuthGmailCallbackRoute: AuthGmailCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
