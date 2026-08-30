@@ -122,5 +122,6 @@ export const getUsoDiario = createServerFn({ method: "GET" })
     return {
       used_today: data?.application_generations ?? 0,
       remaining_today: Math.max(0, 2 - (data?.application_generations ?? 0)),
+      limit: 2,
     };
   });

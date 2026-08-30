@@ -1,9 +1,11 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { FileText, User, Sparkles, Briefcase } from "lucide-react";
+import { FileText, User, Sparkles, Briefcase, Loader2 } from "lucide-react";
 import { JackMark } from "@/components/SiteHeader";
 import { UserMenu } from "@/components/UserMenu";
-import { LIMITE_DIARIO, mailsEnviadosHoy, usePostulaciones } from "@/lib/mock-postulaciones";
+import { getUsoDiario } from "@/lib/application.functions";
 
 const nav = [
   { to: "/perfil", label: "Perfil", icon: User },
@@ -11,6 +13,8 @@ const nav = [
   { to: "/mis-cv", label: "Mis CVs", icon: FileText },
   { to: "/postulaciones", label: "Postulaciones", icon: Briefcase },
 ] as const;
+
+const usoDiarioQueryKey = ["uso-diario"];
 
 export function AppShell({
   title,
@@ -22,8 +26,12 @@ export function AppShell({
   children: ReactNode;
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  usePostulaciones();
-  const enviados = mailsEnviadosHoy();
+  const fetchUso = useServerFn(getUsoDiario);
+
+  const { data: uso, isPending } = useQuery({
+    queryKey: usoDiarioQueryKey,
+    queryFn: () => fetchUso(),
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -57,7 +65,11 @@ export function AppShell({
               Uso diario
             </p>
             <p className="mt-2 font-display text-2xl font-bold">
-              {enviados} / {LIMITE_DIARIO}
+              {isPending ? (
+                <Loader2 className="size-6 animate-spin text-muted-foreground" />
+              ) : (
+                `${uso.used_today} / ${uso.limit}`
+              )}
             </p>
             <p className="text-xs text-muted-foreground">postulaciones enviadas hoy</p>
             <p className="mt-3 text-xs text-muted-foreground">
