@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { listarCvs, crearCv, borrarCv, duplicarCv, crearCvDesdeUpload } from "@/lib/cv.functions";
 import { extraerTextoPdf, extraerTextoDocx, detectarTipoArchivo } from "@/lib/extract";
 import { hace } from "@/lib/cv.model";
+import { FUNNEL, trackEvent } from "@/lib/observability";
 
 export const Route = createFileRoute("/_authenticated/mis-cv")({
   component: MisCvsPage,
@@ -39,6 +40,7 @@ function MisCvsPage() {
     mutationFn: () => createCvFn({ data: { title: "Mi CV" } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: cvsQueryKey });
+      trackEvent(FUNNEL.crearCv);
       toast.success("CV creado");
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Error al crear CV"),

@@ -14,6 +14,7 @@ import {
   crearVacanteYPostulacion,
 } from "@/lib/ai/ai-postulacion.functions";
 import { listarCvs } from "@/lib/cv.functions";
+import { FUNNEL, trackEvent } from "@/lib/observability";
 
 /* ─── Wrappers tipados: bypass al bug de inferencia de TanStack Start ───
    El runtime espera { data: { ... } } cuando hay middleware+validator.
@@ -143,6 +144,7 @@ function NuevaPostulacion() {
       });
       setRequisitos(res.requirements_required);
       setExtraido(true);
+      trackEvent(FUNNEL.extraerDatos, { confidence: res.confidence });
     },
   });
 
@@ -164,6 +166,7 @@ function NuevaPostulacion() {
         source_notes: datos.source_notes,
       }),
     onSuccess: (res) => {
+      trackEvent(FUNNEL.generarPostulacion);
       void navigate({
         to: "/postulaciones/$id",
         params: { id: res.applicationId },

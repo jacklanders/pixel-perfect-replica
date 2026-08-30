@@ -43,6 +43,7 @@ import {
 } from "@/lib/application.functions";
 import { subirAdjuntoTemporal, borrarAdjuntoTemporal } from "@/lib/attachment.functions";
 import { listarCvs } from "@/lib/cv.functions";
+import { FUNNEL, trackEvent } from "@/lib/observability";
 import { getMiPerfil } from "@/lib/perfil.functions";
 import { verificarEstadoGmail, generarGmailAuthUrl, desconectarGmail } from "@/lib/oauth.functions";
 import { useAuth } from "@/hooks/useAuth";
@@ -186,6 +187,7 @@ function CampoCopiable({
 
   const copiar = () => {
     void navigator.clipboard?.writeText(value);
+    trackEvent(FUNNEL.copiar);
     setCopiado(true);
     setTimeout(() => setCopiado(false), 1600);
   };
@@ -374,6 +376,7 @@ function DetallePostulacion() {
         },
       } as unknown as Parameters<typeof enviarEmailGmail>[0]),
     onSuccess: () => {
+      trackEvent(FUNNEL.enviarGmail);
       toast.success("Postulación enviada por Gmail");
       setGmailError(null);
       setArchivoAdjunto(null);
@@ -381,6 +384,9 @@ function DetallePostulacion() {
     },
     onError: (err) => {
       const msg = err instanceof Error ? err.message : "Error al enviar por Gmail";
+      if (msg.includes("Límite diario")) {
+        trackEvent(FUNNEL.limiteDiario);
+      }
       setGmailError(msg);
       void refetchGmail();
       if (msg.includes("401") || msg.includes("Token expirado") || msg.includes("refresh")) {
@@ -513,6 +519,7 @@ function DetallePostulacion() {
   const copiarTodo = () => {
     const bloque = `PARA: ${destino}\nASUNTO: ${asuntoActual}\n\n${cuerpo}\n\n--\n${firma}`;
     void navigator.clipboard?.writeText(bloque);
+    trackEvent(FUNNEL.copiar, { origen: "todo" });
     toast.success("Todo copiado al portapapeles");
   };
 

@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { FUNNEL, trackEvent } from "@/lib/observability";
 
 export const Route = createFileRoute("/auth/callback")({
   component: AuthCallback,
@@ -37,6 +38,7 @@ function AuthCallback() {
       } = await supabase.auth.getSession();
 
       if (existingSession) {
+        trackEvent(FUNNEL.loginOk);
         navigate({ to: "/perfil" });
         return;
       }
@@ -45,6 +47,7 @@ function AuthCallback() {
       const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
       if (!exchangeError) {
+        trackEvent(FUNNEL.loginOk);
         setStatus("¡Listo! Redirigiendo…");
         setTimeout(() => navigate({ to: "/perfil" }), 300);
         return;
@@ -56,6 +59,7 @@ function AuthCallback() {
       } = await supabase.auth.getSession();
 
       if (sessionAfter) {
+        trackEvent(FUNNEL.loginOk);
         navigate({ to: "/perfil" });
         return;
       }
