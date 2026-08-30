@@ -332,6 +332,7 @@ function DetallePostulacion() {
     onError: (err) => {
       const msg = err instanceof Error ? err.message : "Error al enviar por Gmail";
       setGmailError(msg);
+      void refetchGmail();
       if (msg.includes("401") || msg.includes("Token expirado") || msg.includes("refresh")) {
         setShowReconnectDialog(true);
       } else {

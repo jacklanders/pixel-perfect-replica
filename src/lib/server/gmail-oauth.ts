@@ -78,6 +78,16 @@ export async function exchangeCodeForTokens(code: string): Promise<GoogleTokenRe
   return res.json() as Promise<GoogleTokenResponse>;
 }
 
+export class GoogleRefreshError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "GoogleRefreshError";
+    this.status = status;
+  }
+}
+
 export async function refreshAccessToken(
   refreshToken: string,
 ): Promise<{ access_token: string; expires_in: number }> {
@@ -96,9 +106,57 @@ export async function refreshAccessToken(
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Google refresh token failed (${res.status}): ${err}`);
+    throw new GoogleRefreshError(res.status, `Google refresh token failed (${res.status}): ${err}`);
   }
   return res.json() as Promise<{ access_token: string; expires_in: number }>;
+}
+
+// ─── Marcar conexión como desconectada (refresh token revocado/expirado) ───
+export async function markGmailDisconnected(userId: string): Promise<void> {
+  const supabase = getServiceClient();
+  const { error } = await supabase.from("oauth_connection_status").upsert(
+    {
+      user_id: userId,
+      provider: "google_gmail",
+      connected: false,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,provider" },
+  );
+  if (error) throw new Error(`Error marcando desconexión: ${error.message}`);
+}
+
+// ─── Refresh + persistencia del nuevo access_token/expires_at ───
+// Si Google responde invalid_grant (400, token revocado/expirado), marca la
+// conexión como desconectada para forzar reautenticación.
+async function refreshAndStoreTokens(userId: string, refreshToken: string): Promise<string> {
+  const supabase = getServiceClient();
+
+  let refreshed: { access_token: string; expires_in: number };
+  try {
+    refreshed = await refreshAccessToken(refreshToken);
+  } catch (err) {
+    if (err instanceof GoogleRefreshError && err.status === 400) {
+      await markGmailDisconnected(userId).catch(() => {});
+    }
+    throw err;
+  }
+
+  const newEncryptedAccess = await encrypt(refreshed.access_token);
+  const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
+
+  const { error } = await supabase
+    .from("oauth_connections")
+    .update({
+      encrypted_access_token: newEncryptedAccess,
+      expires_at: newExpiresAt,
+    })
+    .eq("user_id", userId)
+    .eq("provider", "google_gmail");
+
+  if (error) throw new Error(`Error actualizando token refrescado: ${error.message}`);
+
+  return refreshed.access_token;
 }
 
 export async function revokeGoogleToken(token: string): Promise<void> {
@@ -184,23 +242,7 @@ export async function getValidAccessToken(userId: string): Promise<string> {
   }
 
   const refreshToken = await decrypt(data.encrypted_refresh_token);
-  const refreshed = await refreshAccessToken(refreshToken);
-
-  const newEncryptedAccess = await encrypt(refreshed.access_token);
-  const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
-
-  const { error: updateError } = await supabase
-    .from("oauth_connections")
-    .update({
-      encrypted_access_token: newEncryptedAccess,
-      expires_at: newExpiresAt,
-    })
-    .eq("user_id", userId)
-    .eq("provider", "google_gmail");
-
-  if (updateError) throw new Error(`Error actualizando token refrescado: ${updateError.message}`);
-
-  return refreshed.access_token;
+  return refreshAndStoreTokens(userId, refreshToken);
 }
 
 // ─── Forzar refresh (para retry tras 401 de Gmail API) ───
@@ -219,21 +261,7 @@ export async function forceRefreshAccessToken(userId: string): Promise<string> {
   }
 
   const refreshToken = await decrypt(data.encrypted_refresh_token);
-  const refreshed = await refreshAccessToken(refreshToken);
-
-  const newEncryptedAccess = await encrypt(refreshed.access_token);
-  const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
-
-  await supabase
-    .from("oauth_connections")
-    .update({
-      encrypted_access_token: newEncryptedAccess,
-      expires_at: newExpiresAt,
-    })
-    .eq("user_id", userId)
-    .eq("provider", "google_gmail");
-
-  return refreshed.access_token;
+  return refreshAndStoreTokens(userId, refreshToken);
 }
 
 // ─── Desconectar Gmail ───
