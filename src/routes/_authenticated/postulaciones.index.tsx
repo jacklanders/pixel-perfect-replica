@@ -195,7 +195,10 @@ function PostulacionesPage() {
         </div>
       ) : appsError ? (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
-          Error al cargar las postulaciones. Intentá recargar la página.
+          <p>Error al cargar las postulaciones. Intentá recargar la página.</p>
+          <p className="mt-2 font-mono text-xs break-all">
+            {appsError instanceof Error ? appsError.message : String(appsError)}
+          </p>
         </div>
       ) : (
         <div className="grid gap-4">
