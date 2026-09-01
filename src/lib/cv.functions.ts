@@ -12,7 +12,7 @@ export const getCvById = createServerFn({ method: "GET" })
     const { data: fila, error } = await context.supabase
       .from("resumes")
       .select("*")
-      .eq("id", data.id)
+      .eq("id", (data as { id: string }).id)
       .eq("user_id", context.userId)
       .single();
 

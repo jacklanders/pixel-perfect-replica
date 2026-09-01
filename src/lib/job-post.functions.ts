@@ -41,12 +41,12 @@ export const listarJobPosts = createServerFn({ method: "GET" })
 
 export const getJobPostById = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .validator(z.object({ id: z.string() }))
+  .validator((input: unknown) => z.object({ id: z.string() }).parse(input))
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("job_posts")
       .select("*")
-      .eq("id", data.id)
+      .eq("id", (data as { id: string }).id)
       .eq("user_id", context.userId)
       .single();
 

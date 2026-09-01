@@ -5,7 +5,6 @@
 
 import { getServiceClient, getEnv } from "./supabase-service";
 import { getValidAccessToken, forceRefreshAccessToken } from "@/lib/server/gmail-oauth";
-import { generarPdfBuffer } from "@/lib/server/cv-pdf-server";
 import { validarTamanioAdjunto } from "@/lib/server/adjuntos";
 import type { Cv } from "@/lib/cv.model";
 import type { Perfil } from "@/lib/perfil.model";
@@ -209,6 +208,8 @@ async function obtenerCvAttachment(
   const perfil = resume.profiles as unknown as Perfil | null;
   const cvData = resume.structured_json as unknown as Cv | null;
   if (!cvData) return null;
+
+  const { generarPdfBuffer } = await import("@/lib/server/cv-pdf-server");
 
   const bytes = await generarPdfBuffer(cvData, perfil, perfil?.nombre ?? "CV");
   await validarTamanioAdjunto(bytes);

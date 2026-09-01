@@ -45,12 +45,12 @@ export const listarApplications = createServerFn({ method: "GET" })
 
 export const getApplicationById = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .validator(z.object({ id: z.string().uuid() }))
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("applications")
       .select("*, job_posts(*), resumes(id, title)")
-      .eq("id", data.id)
+      .eq("id", (data as { id: string }).id)
       .eq("user_id", context.userId)
       .maybeSingle();
 
@@ -81,7 +81,7 @@ export const actualizarApplicationStatus = createServerFn({ method: "POST" })
     const { data: row, error } = await context.supabase
       .from("applications")
       .update(update)
-      .eq("id", data.id)
+      .eq("id", (data as { id: string }).id)
       .eq("user_id", context.userId)
       .select()
       .single();
@@ -111,7 +111,7 @@ export const actualizarApplication = createServerFn({ method: "POST" })
     const { data: row, error } = await context.supabase
       .from("applications")
       .update(update)
-      .eq("id", data.id)
+      .eq("id", (data as { id: string }).id)
       .eq("user_id", context.userId)
       .select()
       .single();

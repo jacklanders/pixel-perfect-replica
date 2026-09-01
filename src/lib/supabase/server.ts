@@ -1,6 +1,3 @@
-// src/lib/supabase/server.ts
-// Cliente de Supabase para el SERVIDOR (SSR y server functions)
-
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
 import { getEnvVar } from "@/lib/server/env";
@@ -22,7 +19,6 @@ function parseCookieHeader(header: string | null): { name: string; value: string
 export function getSupabaseServerClient() {
   const request = getRequest();
 
-  // FIX: Defensa contra request undefined (puede pasar en workers)
   if (!request) {
     throw new Error("No hay request disponible en el contexto del servidor");
   }
@@ -33,8 +29,7 @@ export function getSupabaseServerClient() {
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
       "Faltan VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY. " +
-        "Verificá que el archivo .env.local esté en la raíz del proyecto, " +
-        "que tenga las variables correctas, y que hayas reiniciado el servidor con Ctrl+C y luego bun run dev.",
+        "Verificá que las variables de entorno estén configuradas en el worker.",
     );
   }
 
