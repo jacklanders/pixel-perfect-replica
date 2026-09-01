@@ -2,10 +2,11 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { FileText, User, Sparkles, Briefcase, Loader2 } from "lucide-react";
+import { FileText, User, Sparkles, Briefcase, Loader2, ShieldCheck } from "lucide-react";
 import { JackMark } from "@/components/SiteHeader";
 import { UserMenu } from "@/components/UserMenu";
 import { getUsoDiario } from "@/lib/application.functions";
+import { getEsAdmin } from "@/lib/admin.functions";
 
 const nav = [
   { to: "/perfil", label: "Perfil", icon: User },
@@ -13,6 +14,8 @@ const nav = [
   { to: "/mis-cv", label: "Mis CVs", icon: FileText },
   { to: "/postulaciones", label: "Postulaciones", icon: Briefcase },
 ] as const;
+
+const adminQueryKey = ["admin", "es-admin"];
 
 const usoDiarioQueryKey = ["uso-diario"];
 
@@ -27,10 +30,17 @@ export function AppShell({
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const fetchUso = useServerFn(getUsoDiario);
+  const fetchEsAdmin = useServerFn(getEsAdmin);
 
   const { data: uso, isPending } = useQuery({
     queryKey: usoDiarioQueryKey,
     queryFn: () => fetchUso(),
+  });
+
+  const { data: esAdmin } = useQuery({
+    queryKey: adminQueryKey,
+    queryFn: () => fetchEsAdmin(),
+    staleTime: 5 * 60 * 1000,
   });
 
   const usedToday = uso?.used_today ?? 0;
@@ -71,6 +81,19 @@ export function AppShell({
                 </Link>
               );
             })}
+            {esAdmin?.esAdmin ? (
+              <Link
+                to="/admin"
+                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
+                  pathname === "/admin"
+                    ? "bg-secondary font-medium text-secondary-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <ShieldCheck className="size-4" />
+                Admin
+              </Link>
+            ) : null}
           </nav>
           <div className="mt-8 rounded-xl border border-border bg-card p-4 shadow-soft">
             <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -114,6 +137,11 @@ export function AppShell({
                     {item.label}
                   </Link>
                 ))}
+                {esAdmin?.esAdmin ? (
+                  <Link to="/admin" className="rounded-lg border border-border px-3 py-1.5 text-xs">
+                    Admin
+                  </Link>
+                ) : null}
               </nav>
             </div>
           </div>

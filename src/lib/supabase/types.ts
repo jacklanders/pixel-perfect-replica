@@ -49,6 +49,12 @@ export interface UserRoleRow {
   granted_at: string;
 }
 
+export interface AppSettingRow {
+  key: string;
+  value: Json;
+  updated_at: string;
+}
+
 /** Contenido estructurado del CV (columna resumes.structured_json). */
 export interface CvExperiencia {
   id: string;

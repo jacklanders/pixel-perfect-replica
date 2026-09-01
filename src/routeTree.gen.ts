@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedCvRouteImport } from './routes/_authenticated/cv'
 import { Route as AuthenticatedMisCvRouteImport } from './routes/_authenticated/mis-cv'
 import { Route as AuthenticatedPerfilRouteImport } from './routes/_authenticated/perfil'
@@ -35,6 +36,11 @@ const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCvRoute = AuthenticatedCvRouteImport.update({
   id: '/cv',
@@ -89,6 +95,7 @@ const AuthenticatedPostulacionesNuevaRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/admin': typeof AuthenticatedAdminRoute
   '/cv': typeof AuthenticatedCvRoute
   '/mis-cv': typeof AuthenticatedMisCvRoute
   '/perfil': typeof AuthenticatedPerfilRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/admin': typeof AuthenticatedAdminRoute
   '/cv': typeof AuthenticatedCvRoute
   '/mis-cv': typeof AuthenticatedMisCvRoute
   '/perfil': typeof AuthenticatedPerfilRoute
@@ -116,6 +124,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/cv': typeof AuthenticatedCvRoute
   '/_authenticated/mis-cv': typeof AuthenticatedMisCvRoute
   '/_authenticated/perfil': typeof AuthenticatedPerfilRoute
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/admin'
     | '/cv'
     | '/mis-cv'
     | '/perfil'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/admin'
     | '/cv'
     | '/mis-cv'
     | '/perfil'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/login'
+    | '/_authenticated/admin'
     | '/_authenticated/cv'
     | '/_authenticated/mis-cv'
     | '/_authenticated/perfil'
@@ -198,6 +210,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/admin': {
+      id: '/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedAdminRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/cv': {
       id: '/_authenticated/cv'
@@ -284,6 +303,7 @@ const AuthenticatedPostulacionesRouteWithChildren =
   )
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedCvRoute: typeof AuthenticatedCvRoute
   AuthenticatedMisCvRoute: typeof AuthenticatedMisCvRoute
   AuthenticatedPerfilRoute: typeof AuthenticatedPerfilRoute
@@ -291,6 +311,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedCvRoute: AuthenticatedCvRoute,
   AuthenticatedMisCvRoute: AuthenticatedMisCvRoute,
   AuthenticatedPerfilRoute: AuthenticatedPerfilRoute,
