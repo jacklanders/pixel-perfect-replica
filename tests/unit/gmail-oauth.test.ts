@@ -1,23 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as oauth from "@/lib/server/gmail-oauth";
 import { FakeSupabase, rowResult, fakeResponse, formBodyOf, errResult } from "./supabase-fake";
-
-// getEnv() es el de supabase-service (mockeado): controlamos credenciales y
-// modo MOCK_GMAIL sin variables reales.
-const state = vi.hoisted(() => {
-  return {
-    env: {
-      GOOGLE_CLIENT_ID: "test-client-id",
-      GOOGLE_CLIENT_SECRET: "test-client-secret",
-      OAUTH_ENCRYPTION_KEY: "test-enc-key-0123456789abcdef",
-    } as Record<string, string | undefined>,
-    client: undefined as FakeSupabase | undefined,
-  };
-});
+import { gmailState } from "./gmail-test-state";
 
 vi.mock("@/lib/server/supabase-service", () => ({
-  getEnv: (key: string) => state.env[key],
-  getServiceClient: () => state.client,
+  getEnv: (key: string) => gmailState.env[key],
+  getServiceClient: () => gmailState.client,
 }));
 
 const isoIn = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
@@ -26,13 +14,14 @@ const isoAgo = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOS
 describe("gmail-oauth", () => {
   let client: FakeSupabase;
   let fetchStub: ReturnType<typeof vi.fn<typeof fetch>>;
+  const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
     client = new FakeSupabase();
-    state.client = client;
+    gmailState.client = client;
 
     fetchStub = vi.fn();
-    vi.stubGlobal("fetch", fetchStub);
+    globalThis.fetch = fetchStub as typeof fetch;
 
     // Defaults: conexión de estado y RPC responden OK.
     client.handlers["oauth_connection_status"] = () => rowResult(null);
@@ -40,7 +29,7 @@ describe("gmail-oauth", () => {
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    globalThis.fetch = originalFetch;
   });
 
   describe("refreshAccessToken", () => {

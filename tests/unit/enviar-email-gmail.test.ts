@@ -3,22 +3,12 @@ import { FakeSupabase, rowResult, fakeResponse } from "./supabase-fake";
 import * as oauth from "@/lib/server/gmail-oauth";
 import { enviarEmailGmailCore } from "@/lib/server/enviar-postulacion-email";
 import type { SupabaseClient } from "@supabase/supabase-js";
-
-const state = vi.hoisted(() => {
-  return {
-    env: {
-      GOOGLE_CLIENT_ID: "test-client-id",
-      GOOGLE_CLIENT_SECRET: "test-client-secret",
-      OAUTH_ENCRYPTION_KEY: "test-enc-key-0123456789abcdef",
-    } as Record<string, string | undefined>,
-    client: undefined as FakeSupabase | undefined,
-  };
-});
+import { gmailState } from "./gmail-test-state";
 
 // getServiceClient (gmail-oauth / gmail-send / adjuntos) devuelve el fake.
 vi.mock("@/lib/server/supabase-service", () => ({
-  getEnv: (key: string) => state.env[key],
-  getServiceClient: () => state.client,
+  getEnv: (key: string) => gmailState.env[key],
+  getServiceClient: () => gmailState.client,
 }));
 
 const isoIn = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
@@ -56,10 +46,11 @@ const coreArgs = (client: FakeSupabase, overrides?: Partial<CoreArgs["data"]>): 
 describe("enviarEmailGmailCore (lógica completa del handler)", () => {
   let client: FakeSupabase;
   let fetchStub: ReturnType<typeof vi.fn>;
+  const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
     client = new FakeSupabase();
-    state.client = client;
+    gmailState.client = client;
 
     client.handlers["app_settings"] = () => rowResult({ value: "10" });
     client.handlers["oauth_connection_status"] = () => rowResult(null);
@@ -73,11 +64,11 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     client.rpcHandler = async () => rowResult([{ allowed: true }]);
 
     fetchStub = vi.fn();
-    vi.stubGlobal("fetch", fetchStub);
+    globalThis.fetch = fetchStub as typeof fetch;
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    globalThis.fetch = originalFetch;
   });
 
   it("con token vigente, envía por Gmail y marca la postulación como enviada (sent_at)", async () => {

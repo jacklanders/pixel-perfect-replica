@@ -2,21 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { enviarPostulacionGmail } from "@/lib/server/gmail-send";
 import { encrypt } from "@/lib/server/gmail-oauth";
 import { FakeSupabase, rowResult, fakeResponse, errResult, blobFrom } from "./supabase-fake";
-
-const state = vi.hoisted(() => {
-  return {
-    env: {
-      GOOGLE_CLIENT_ID: "test-client-id",
-      GOOGLE_CLIENT_SECRET: "test-client-secret",
-      OAUTH_ENCRYPTION_KEY: "test-enc-key-0123456789abcdef",
-    } as Record<string, string | undefined>,
-    client: undefined as FakeSupabase | undefined,
-  };
-});
+import { gmailState } from "./gmail-test-state";
 
 vi.mock("@/lib/server/supabase-service", () => ({
-  getEnv: (key: string) => state.env[key],
-  getServiceClient: () => state.client,
+  getEnv: (key: string) => gmailState.env[key],
+  getServiceClient: () => gmailState.client,
 }));
 
 // ─── Fixtures ───
@@ -58,10 +48,11 @@ const RESUMEN_SUBIDO = {
 describe("enviarPostulacionGmail", () => {
   let client: FakeSupabase;
   let fetchStub: ReturnType<typeof vi.fn>;
+  const originalFetch = globalThis.fetch;
 
   beforeEach(async () => {
     client = new FakeSupabase();
-    state.client = client;
+    gmailState.client = client;
 
     // Límite por defecto (10MB).
     client.handlers["app_settings"] = () => rowResult({ value: "10" });
@@ -78,11 +69,11 @@ describe("enviarPostulacionGmail", () => {
       });
 
     fetchStub = vi.fn();
-    vi.stubGlobal("fetch", fetchStub);
+    globalThis.fetch = fetchStub as typeof fetch;
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    globalThis.fetch = originalFetch;
   });
 
   const gmailCalls = () => {
