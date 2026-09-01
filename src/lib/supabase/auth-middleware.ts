@@ -1,5 +1,6 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { isMockAuthEnabled } from "@/lib/server/env";
 
 // Identidad de test usada cuando MOCK_AUTH=true. Debe existir en la base (con
 // filas en profiles/user_roles) para que el resto del flujo funcione bajo RLS.
@@ -8,7 +9,7 @@ const MOCK_USER_ID = "00000000-0000-0000-0000-000000000001";
 const MOCK_USER_EMAIL = "test@jack.local";
 
 function getMockHeaderValue(): string | null {
-  if (typeof process !== "undefined" && process.env && process.env["MOCK_AUTH"] === "true") {
+  if (isMockAuthEnabled()) {
     return `${MOCK_USER_ID}:${MOCK_USER_EMAIL}`;
   }
   return null;

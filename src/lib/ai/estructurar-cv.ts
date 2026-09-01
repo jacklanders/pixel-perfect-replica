@@ -228,7 +228,8 @@ function parsearHabilidades(texto: string): CvHabilidadCategoria[] {
       // Línea de categoría "Categoria: items"
       actual = { categoria: match[1]!.trim(), items: [] };
       categorias.push(actual);
-      const items = match[2]!.split(/[,;•]/)
+      const items = match[2]!
+        .split(/[,;•]/)
         .map((s) => s.trim())
         .filter(Boolean);
       actual.items.push(...items);
