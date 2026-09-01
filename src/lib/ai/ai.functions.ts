@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
-import { createAIProvider } from "@/lib/ai/ai-provider";
+import { createAIProvider, traducirErrorIA } from "@/lib/ai/ai-provider";
 import { PROMPT_RESUME_IMPROVEMENT, SYSTEM_PROMPT_BASE } from "@/lib/ai/prompts";
 import { filaACv } from "@/lib/cv.model";
 import { filaAPerfil } from "@/lib/perfil.model";
@@ -73,7 +73,7 @@ export interface MejoraSugerida {
   preguntas: string[];
 }
 
-function cvATexto(cv: { contenido: CvContenido }, perfil: Perfil | null): string {
+export function cvATexto(cv: { contenido: CvContenido }, perfil: Perfil | null): string {
   const lineas: string[] = [];
   lineas.push(`TITULAR: ${cv.contenido.titular}`);
   lineas.push(`PERFIL: ${cv.contenido.perfil}`);
@@ -112,7 +112,7 @@ function cvATexto(cv: { contenido: CvContenido }, perfil: Perfil | null): string
   return lineas.join("\n");
 }
 
-function perfilATexto(perfil: Perfil | null): string {
+export function perfilATexto(perfil: Perfil | null): string {
   if (!perfil) return "Perfil no cargado";
   const lineas: string[] = [];
   lineas.push(`Nombre: ${perfil.nombre}`);
@@ -169,11 +169,16 @@ export const mejorarCvConJack = createServerFn({ method: "POST" })
 
     // 4. Llamar a IA
     const provider = createAIProvider();
-    const response = await provider.generate({
-      system: SYSTEM_PROMPT_BASE,
-      messages: [{ role: "user", content: userPrompt }],
-      temperature: 0.7,
-    });
+    let response;
+    try {
+      response = await provider.generate({
+        system: SYSTEM_PROMPT_BASE,
+        messages: [{ role: "user", content: userPrompt }],
+        temperature: 0.7,
+      });
+    } catch (err) {
+      throw traducirErrorIA(err);
+    }
 
     // 5. Parsear JSON
     let rawJson = response.content.trim();

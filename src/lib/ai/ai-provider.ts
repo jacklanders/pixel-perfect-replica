@@ -44,6 +44,41 @@ function stripBase64Header(base64: string): string {
   return base64.replace(/^data:[^;,]+;base64,/, "");
 }
 
+/**
+ * Traduce un error crudo de un proveedor de IA (Gemini/Anthropic) a un
+ * mensaje entendible para el usuario. Se usa en los server functions que
+ * llaman a la IA para que el chat y las pantallas muestren algo legible
+ * en vez de "Gemini API error (503): {...}".
+ */
+export function traducirErrorIA(err: unknown): Error {
+  const msg = err instanceof Error ? err.message : String(err);
+
+  // Límites de cuota / servicio saturado (503/429/529/overloaded)
+  if (
+    /\(50[0-9]\)|\(429\)|\(529\)/i.test(msg) ||
+    /high demand|UNAVAILABLE|overloaded|resource_exhausted|too many requests|Rate limit/i.test(msg)
+  ) {
+    return new Error(
+      "Jack está con mucha demanda ahora mismo. Esperá unos segundos y probá de nuevo.",
+    );
+  }
+
+  // Bloqueo por seguridad de la IA
+  if (/SAFETY|bloqueada por seguridad|blocked/i.test(msg)) {
+    return new Error("La respuesta fue bloqueada por seguridad de la IA. Reformulá el pedido.");
+  }
+
+  // Configuración / credenciales
+  if (
+    /Falta (GEMINI|ANTHROPIC)_API_KEY|API key|invalid_api_key|^AI_PROVIDER desconocido/i.test(msg)
+  ) {
+    return new Error("Jack no está configurado correctamente. Contactá al equipo.");
+  }
+
+  // Fallback genérico
+  return new Error("Jack no pudo procesar tu solicitud. Esperá un momento y probá de nuevo.");
+}
+
 // ─── Mock Provider para tests E2E ───
 class MockAIProvider implements AIProvider {
   async generate(options: GenerateOptions): Promise<AIResponse> {

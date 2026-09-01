@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { ImageUp, Sparkles, Wand2, AlertTriangle, Loader2, FileText, Check } from "lucide-react";
 import {
   analizarVacanteConJack,
@@ -167,6 +168,11 @@ function NuevaPostulacion() {
       }),
     onSuccess: (res) => {
       trackEvent(FUNNEL.generarPostulacion);
+      if (!res.emailGenerado) {
+        toast.warning(
+          "Se creó la postulación, pero Jack no pudo armar el mail todavía. Podés regenerarlo desde el detalle.",
+        );
+      }
       void navigate({
         to: "/postulaciones/$id",
         params: { id: res.applicationId },

@@ -52,9 +52,12 @@ export const getApplicationById = createServerFn({ method: "GET" })
       .select("*, job_posts(*), resumes(id, title)")
       .eq("id", data.id)
       .eq("user_id", context.userId)
-      .single();
+      .maybeSingle();
 
     if (error) throw new Error(error.message);
+    if (!row) {
+      throw new Error("Esa postulación no existe o no pertenece a tu cuenta.");
+    }
     return row;
   });
 

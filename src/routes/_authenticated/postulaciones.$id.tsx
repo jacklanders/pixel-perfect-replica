@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -41,6 +41,7 @@ import {
   getUsoDiario,
   enviarEmailGmail,
 } from "@/lib/application.functions";
+import { generarEmailDePostulacionConJack } from "@/lib/ai/ai-postulacion.functions";
 import { subirAdjuntoTemporal, borrarAdjuntoTemporal } from "@/lib/attachment.functions";
 import { listarCvs } from "@/lib/cv.functions";
 import { FUNNEL, trackEvent } from "@/lib/observability";
@@ -88,6 +89,23 @@ async function cambiarStatus(payload: StatusInput) {
   return actualizarApplicationStatus({
     data: payload,
   } as unknown as Parameters<typeof actualizarApplicationStatus>[0]);
+}
+
+type GenerarMailInput = {
+  postulacion_id: string;
+  resume_id: string;
+  role: string;
+  company: string;
+  location: string | null;
+  mandatory_subject: string | null;
+  requirements_required: string[];
+  requirements_preferred: string[];
+};
+
+async function armarMail(payload: GenerarMailInput) {
+  return generarEmailDePostulacionConJack({
+    data: payload,
+  } as unknown as Parameters<typeof generarEmailDePostulacionConJack>[0]);
 }
 
 type SubirAdjuntoInput = {
@@ -262,6 +280,7 @@ export const Route = createFileRoute("/_authenticated/postulaciones/$id")({
 function DetallePostulacion() {
   const { id } = Route.useParams();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const fetchUso = useServerFn(getUsoDiario);
   const fetchCvs = useServerFn(listarCvs);
@@ -353,6 +372,43 @@ function DetallePostulacion() {
       }),
     onSuccess: () => toast.success("Cambios guardados"),
     onError: (err) => toast.error(err instanceof Error ? err.message : "Error al guardar"),
+  });
+
+  const generarMail = useMutation({
+    mutationFn: () =>
+      armarMail({
+        postulacion_id: id,
+        resume_id: app?.resume_id ?? "",
+        role: app?.job_posts?.role ?? "",
+        company: app?.job_posts?.employer ?? "",
+        location: app?.job_posts?.location ?? null,
+        mandatory_subject: app?.required_subject ?? null,
+        requirements_required: Array.isArray(
+          (app?.job_posts?.extracted_json as Record<string, unknown> | null | undefined)?.[
+            "requirements_required"
+          ],
+        )
+          ? ((app?.job_posts?.extracted_json as Record<string, unknown>)[
+              "requirements_required"
+            ] as string[])
+          : [],
+        requirements_preferred: Array.isArray(
+          (app?.job_posts?.extracted_json as Record<string, unknown> | null | undefined)?.[
+            "requirements_preferred"
+          ],
+        )
+          ? ((app?.job_posts?.extracted_json as Record<string, unknown>)[
+              "requirements_preferred"
+            ] as string[])
+          : [],
+      }),
+    onSuccess: (res) => {
+      if (res.cuerpo) setCuerpo(res.cuerpo);
+      if (res.asunto) setAsuntoElegido("generico");
+      toast.success("Mail armado por Jack");
+      void queryClient.invalidateQueries({ queryKey: ["application", id] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo armar el mail"),
   });
 
   const enviar = useMutation({
@@ -618,6 +674,26 @@ function DetallePostulacion() {
           <CampoCopiable label="Asunto elegido" value={asuntoActual} fijo />
           <CampoCopiable label="Origen" value={user?.email ?? ""} fijo />
           <CampoCopiable label="Destino" value={destino} onChange={setDestino} />
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generarMail.mutate()}
+              disabled={generarMail.isPending || !app?.resume_id}
+              title={
+                app?.resume_id
+                  ? "Usar el CV seleccionado para armar el mail con Jack"
+                  : "Necesitás un CV para armar el mail"
+              }
+            >
+              {generarMail.isPending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="size-3.5" />
+              )}
+              Armar mail con Jack
+            </Button>
+          </div>
           <CampoCopiable label="Cuerpo" value={cuerpo} multiline onChange={setCuerpo} />
           <CampoCopiable label="Firma" value={firma} multiline onChange={setFirma} />
 
