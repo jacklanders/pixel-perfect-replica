@@ -174,6 +174,41 @@ describe("enviarPostulacionGmail", () => {
     expect(updateOp).toBeDefined();
   });
 
+  it("reintenta con backoff ante un error transitorio (503) sin tocar el token", async () => {
+    client.handlers["resumes"] = () => rowResult(RESUMEN_GENERADO);
+
+    const gmailStatuses = [503, 200];
+    fetchStub.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.includes("gmail.googleapis.com")) {
+        const status = gmailStatuses.shift() ?? 200;
+        return fakeResponse(status, status === 200 ? { id: "m-503" } : "Service Unavailable");
+      }
+      throw new Error(`URL inesperada: ${url}`);
+    });
+
+    const result = await enviarPostulacionGmail({
+      userId: "user-1",
+      fromEmail: "juan@test.com",
+      toEmail: "rrhh@empresa.com",
+      subject: "Postulación",
+      body: "Hola",
+      resumeId: "res-jack",
+      includeCopy: false,
+      adjunto: null,
+    });
+
+    expect(result.messageId).toBe("m-503");
+
+    // Se reintentó con el mismo token vigente (no se forzó refresh).
+    const gmail = gmailCalls();
+    expect(gmail).toHaveLength(2);
+    expect(bearerOf(gmail[0]!)).toBe("Bearer access-valid");
+    expect(bearerOf(gmail[1]!)).toBe("Bearer access-valid");
+    const updateOp = client.calls.find((c) => c.op === "update" && c.table === "oauth_connections");
+    expect(updateOp).toBeUndefined();
+  });
+
   it("si el retry falla porque el token está revocado, no se envía y se marca desconectado", async () => {
     client.handlers["resumes"] = () => rowResult(RESUMEN_GENERADO);
 

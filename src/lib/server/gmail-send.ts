@@ -84,6 +84,17 @@ function buildMimeMessage(options: {
   return mime;
 }
 
+// ─── Error tipado de la API de Gmail ───
+export class GmailApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "GmailApiError";
+    this.status = status;
+  }
+}
+
 // ─── Call Gmail API ───
 async function sendGmailRaw(accessToken: string, rawBase64Url: string): Promise<{ id: string }> {
   const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
@@ -97,13 +108,35 @@ async function sendGmailRaw(accessToken: string, rawBase64Url: string): Promise<
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Gmail API error (${res.status}): ${err}`);
+    throw new GmailApiError(res.status, `Gmail API error (${res.status}): ${err}`);
   }
 
   return res.json() as Promise<{ id: string }>;
 }
 
-// ─── Retry con refresh automático ───
+// ─── Errores transitorios (429 rate-limit / 5xx) retryables con backoff ───
+const TRANSIENT_STATUS = (status: number) => status === 429 || status >= 500;
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function sendWithTransientRetry(
+  attempt: () => Promise<{ id: string }>,
+  maxRetries = 2,
+): Promise<{ id: string }> {
+  for (let i = 0; ; i++) {
+    try {
+      return await attempt();
+    } catch (err) {
+      if (!(err instanceof GmailApiError) || !TRANSIENT_STATUS(err.status) || i >= maxRetries) {
+        throw err;
+      }
+      await delay(300 * 2 ** i);
+    }
+  }
+}
+
+// ─── Envío con retry por status ───
+// 401 (token expirado/revocado) → forzar refresh y reintentar.
+// 429 / 5xx (transitorios) → reintentar con backoff sin tocar el token.
 async function sendGmailWithRetry(userId: string, rawBase64Url: string): Promise<{ id: string }> {
   // En modo E2E (MOCK_GMAIL=true) no llamamos a la API de Gmail; el resto del
   // flujo (límite diario vía RPC, marcar sent, adjuntos en Storage) sigue real.
@@ -115,10 +148,12 @@ async function sendGmailWithRetry(userId: string, rawBase64Url: string): Promise
   try {
     return await sendGmailRaw(accessToken, rawBase64Url);
   } catch (err) {
-    // Si es 401, forzar refresh y reintentar una vez
-    if (err instanceof Error && err.message.includes("401")) {
+    if (err instanceof GmailApiError && err.status === 401) {
       const newToken = await forceRefreshAccessToken(userId);
-      return await sendGmailRaw(newToken, rawBase64Url);
+      return await sendWithTransientRetry(() => sendGmailRaw(newToken, rawBase64Url));
+    }
+    if (err instanceof GmailApiError && TRANSIENT_STATUS(err.status)) {
+      return await sendWithTransientRetry(() => sendGmailRaw(accessToken, rawBase64Url));
     }
     throw err;
   }
