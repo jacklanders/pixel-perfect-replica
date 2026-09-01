@@ -128,6 +128,18 @@ export const crearVacanteYPostulacion = createServerFn({ method: "POST" })
 
     if (errJob) throw new Error(errJob.message);
 
+    // 1b. Validar que el CV pertenezca al usuario antes de vincularlo a la
+    // postulación. Evita que un cliente envíe un resume_id ajeno (IDOR).
+    const { data: ownedResume, error: resumeErr } = await context.supabase
+      .from("resumes")
+      .select("id")
+      .eq("id", data.resume_id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (resumeErr || !ownedResume) {
+      throw new Error("El CV seleccionado no pertenece a tu cuenta");
+    }
+
     // 2. Crear application vinculada
     const { data: app, error: errApp } = await context.supabase
       .from("applications")

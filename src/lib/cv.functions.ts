@@ -195,8 +195,12 @@ export const crearCvDesdeUpload = createServerFn({ method: "POST" })
       });
 
     if (errorUpload) {
-      // Rollback: borrar el CV creado
-      await context.supabase.from("resumes").delete().eq("id", fila.id);
+      // Rollback: borrar el CV creado (siempre scoped al usuario por defensa).
+      await context.supabase
+        .from("resumes")
+        .delete()
+        .eq("id", fila.id)
+        .eq("user_id", context.userId);
       throw new Error(`Error al subir archivo: ${errorUpload.message}`);
     }
 
