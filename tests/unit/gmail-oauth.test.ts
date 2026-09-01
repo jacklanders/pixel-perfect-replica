@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import * as oauth from "@/lib/server/gmail-oauth";
 import { FakeSupabase, rowResult, fakeResponse, formBodyOf, errResult } from "./supabase-fake";
 import { gmailState } from "./gmail-test-state";
@@ -15,6 +16,7 @@ describe("gmail-oauth", () => {
   let client: FakeSupabase;
   let fetchStub: ReturnType<typeof vi.fn<typeof fetch>>;
   const originalFetch = globalThis.fetch;
+  const fake = () => client as unknown as SupabaseClient;
 
   beforeEach(() => {
     client = new FakeSupabase();
@@ -70,7 +72,7 @@ describe("gmail-oauth", () => {
           expires_at: isoIn(60 * 60),
         });
 
-      const token = await oauth.getValidAccessToken("user-1");
+      const token = await oauth.getValidAccessToken("user-1", fake());
 
       expect(token).toBe("access-vigente");
       expect(fetchStub).not.toHaveBeenCalled();
@@ -89,7 +91,7 @@ describe("gmail-oauth", () => {
         fakeResponse(200, { access_token: "access-refrescado", expires_in: 3600 }),
       );
 
-      const token = await oauth.getValidAccessToken("user-1");
+      const token = await oauth.getValidAccessToken("user-1", fake());
 
       expect(token).toBe("access-refrescado");
 
@@ -117,7 +119,7 @@ describe("gmail-oauth", () => {
         });
       fetchStub.mockResolvedValue(fakeResponse(400, "invalid_grant"));
 
-      await expect(oauth.getValidAccessToken("user-1")).rejects.toMatchObject({
+      await expect(oauth.getValidAccessToken("user-1", fake())).rejects.toMatchObject({
         name: "GoogleRefreshError",
         status: 400,
       });
@@ -132,7 +134,7 @@ describe("gmail-oauth", () => {
     it("sin conexión activa lanza un error claro", async () => {
       client.handlers["oauth_connections"] = () => errResult("not found");
 
-      await expect(oauth.getValidAccessToken("user-ghost")).rejects.toThrow(
+      await expect(oauth.getValidAccessToken("user-ghost", fake())).rejects.toThrow(
         "No hay conexión Gmail activa",
       );
     });
@@ -142,7 +144,7 @@ describe("gmail-oauth", () => {
     it("lanza error si no hay refresh token", async () => {
       client.handlers["oauth_connections"] = () => rowResult({ encrypted_refresh_token: null });
 
-      await expect(oauth.forceRefreshAccessToken("user-1")).rejects.toThrow(
+      await expect(oauth.forceRefreshAccessToken("user-1", fake())).rejects.toThrow(
         "No hay refresh token para forzar renovación",
       );
     });
@@ -150,7 +152,7 @@ describe("gmail-oauth", () => {
 
   describe("markGmailDisconnected", () => {
     it("escribe connected=false en oauth_connection_status", async () => {
-      await oauth.markGmailDisconnected("user-1");
+      await oauth.markGmailDisconnected("user-1", fake());
 
       const statusOp = client.calls.find(
         (c) => c.op === "upsert" && c.table === "oauth_connection_status",

@@ -137,19 +137,23 @@ async function sendWithTransientRetry(
 // ─── Envío con retry por status ───
 // 401 (token expirado/revocado) → forzar refresh y reintentar.
 // 429 / 5xx (transitorios) → reintentar con backoff sin tocar el token.
-async function sendGmailWithRetry(userId: string, rawBase64Url: string): Promise<{ id: string }> {
+async function sendGmailWithRetry(
+  userId: string,
+  rawBase64Url: string,
+  supabase: ReturnType<typeof getServiceClient>,
+): Promise<{ id: string }> {
   // En modo E2E (MOCK_GMAIL=true) no llamamos a la API de Gmail; el resto del
   // flujo (límite diario vía RPC, marcar sent, adjuntos en Storage) sigue real.
   if (getEnv("MOCK_GMAIL") === "true") {
     return { id: "mock-message-id" };
   }
 
-  const accessToken = await getValidAccessToken(userId);
+  const accessToken = await getValidAccessToken(userId, supabase);
   try {
     return await sendGmailRaw(accessToken, rawBase64Url);
   } catch (err) {
     if (err instanceof GmailApiError && err.status === 401) {
-      const newToken = await forceRefreshAccessToken(userId);
+      const newToken = await forceRefreshAccessToken(userId, supabase);
       return await sendWithTransientRetry(() => sendGmailRaw(newToken, rawBase64Url));
     }
     if (err instanceof GmailApiError && TRANSIENT_STATUS(err.status)) {
@@ -269,24 +273,25 @@ function validarDatosEnvio(options: {
 }
 
 // ─── Función principal: enviar postulación por Gmail ───
-export async function enviarPostulacionGmail(options: {
-  userId: string;
-  fromEmail: string;
-  toEmail: string;
-  subject: string;
-  body: string;
-  resumeId: string | null;
-  includeCopy: boolean;
-  adjunto?: AdjuntoArchivo | null;
-}): Promise<{ messageId: string }> {
+export async function enviarPostulacionGmail(
+  options: {
+    userId: string;
+    fromEmail: string;
+    toEmail: string;
+    subject: string;
+    body: string;
+    resumeId: string | null;
+    includeCopy: boolean;
+    adjunto?: AdjuntoArchivo | null;
+  },
+  supabase: ReturnType<typeof getServiceClient> = getServiceClient(),
+): Promise<{ messageId: string }> {
   validarDatosEnvio({
     fromEmail: options.fromEmail,
     toEmail: options.toEmail,
     subject: options.subject,
     body: options.body,
   });
-
-  const supabase = getServiceClient();
 
   // 1. Obtener adjunto: archivo temporal (PDF/DOCX subido) o CV guardado
   let attachment: { filename: string; mimeType: string; bytes: Uint8Array } | null = null;
@@ -310,7 +315,7 @@ export async function enviarPostulacionGmail(options: {
   const rawBase64Url = toBase64Url(utf8ToBase64(mimeMessage));
 
   // 4. Enviar vía Gmail API (con retry por refresh)
-  const result = await sendGmailWithRetry(options.userId, rawBase64Url);
+  const result = await sendGmailWithRetry(options.userId, rawBase64Url, supabase);
 
   // 5. Limpiar adjunto temporal tras envío exitoso
   if (options.adjunto) {

@@ -2,8 +2,8 @@
  * Lógica server-only para OAuth de Gmail.
  */
 
-import { getServiceClient, getEnv } from "./supabase-service";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getEnv } from "./supabase-service";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // ─── Config (lazy: se valida en el primer uso, no al importar el módulo) ───
 // Leer las credenciales en tiempo de importación impedía testear el módulo sin
@@ -137,8 +137,10 @@ export async function refreshAccessToken(
 }
 
 // ─── Marcar conexión como desconectada (refresh token revocado/expirado) ───
-export async function markGmailDisconnected(userId: string): Promise<void> {
-  const supabase = getServiceClient();
+export async function markGmailDisconnected(
+  userId: string,
+  supabase: SupabaseClient,
+): Promise<void> {
   const { error } = await supabase.from("oauth_connection_status").upsert(
     {
       user_id: userId,
@@ -154,15 +156,17 @@ export async function markGmailDisconnected(userId: string): Promise<void> {
 // ─── Refresh + persistencia del nuevo access_token/expires_at ───
 // Si Google responde invalid_grant (400, token revocado/expirado), marca la
 // conexión como desconectada para forzar reautenticación.
-async function refreshAndStoreTokens(userId: string, refreshToken: string): Promise<string> {
-  const supabase = getServiceClient();
-
+async function refreshAndStoreTokens(
+  userId: string,
+  refreshToken: string,
+  supabase: SupabaseClient,
+): Promise<string> {
   let refreshed: { access_token: string; expires_in: number };
   try {
     refreshed = await refreshAccessToken(refreshToken);
   } catch (err) {
     if (err instanceof GoogleRefreshError && err.status === 400) {
-      await markGmailDisconnected(userId).catch(() => {});
+      await markGmailDisconnected(userId, supabase).catch(() => {});
     }
     throw err;
   }
@@ -207,8 +211,11 @@ export function buildGmailAuthUrl(state: string): string {
 }
 
 // ─── Guardar tokens en DB ───
-export async function saveGmailTokens(userId: string, tokens: GoogleTokenResponse): Promise<void> {
-  const supabase = getServiceClient();
+export async function saveGmailTokens(
+  userId: string,
+  tokens: GoogleTokenResponse,
+  supabase: SupabaseClient,
+): Promise<void> {
   const encryptedAccess = await encrypt(tokens.access_token);
   const encryptedRefresh = tokens.refresh_token ? await encrypt(tokens.refresh_token) : null;
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
@@ -243,9 +250,10 @@ export async function saveGmailTokens(userId: string, tokens: GoogleTokenRespons
 }
 
 // ─── Obtener access token válido (con auto-refresh) ───
-export async function getValidAccessToken(userId: string): Promise<string> {
-  const supabase = getServiceClient();
-
+export async function getValidAccessToken(
+  userId: string,
+  supabase: SupabaseClient,
+): Promise<string> {
   const { data, error } = await supabase
     .from("oauth_connections")
     .select("encrypted_access_token, encrypted_refresh_token, expires_at")
@@ -268,13 +276,14 @@ export async function getValidAccessToken(userId: string): Promise<string> {
   }
 
   const refreshToken = await decrypt(data.encrypted_refresh_token);
-  return refreshAndStoreTokens(userId, refreshToken);
+  return refreshAndStoreTokens(userId, refreshToken, supabase);
 }
 
 // ─── Forzar refresh (para retry tras 401 de Gmail API) ───
-export async function forceRefreshAccessToken(userId: string): Promise<string> {
-  const supabase = getServiceClient();
-
+export async function forceRefreshAccessToken(
+  userId: string,
+  supabase: SupabaseClient,
+): Promise<string> {
   const { data } = await supabase
     .from("oauth_connections")
     .select("encrypted_refresh_token")
@@ -287,13 +296,11 @@ export async function forceRefreshAccessToken(userId: string): Promise<string> {
   }
 
   const refreshToken = await decrypt(data.encrypted_refresh_token);
-  return refreshAndStoreTokens(userId, refreshToken);
+  return refreshAndStoreTokens(userId, refreshToken, supabase);
 }
 
 // ─── Desconectar Gmail ───
-export async function disconnectGmail(userId: string): Promise<void> {
-  const supabase = getServiceClient();
-
+export async function disconnectGmail(userId: string, supabase: SupabaseClient): Promise<void> {
   const { data } = await supabase
     .from("oauth_connections")
     .select("encrypted_refresh_token")
@@ -330,9 +337,8 @@ export async function disconnectGmail(userId: string): Promise<void> {
 // ─── Verificar estado de conexión ───
 export async function isGmailConnected(
   userId: string,
+  supabase: SupabaseClient,
 ): Promise<{ connected: boolean; email: string | null }> {
-  const supabase = getSupabaseServerClient();
-
   // En modo E2E (MOCK_GMAIL=true) simulamos la conexión activa.
   const { data: profile } = await supabase
     .from("profiles")

@@ -27,7 +27,7 @@ export const procesarGmailCallback = createServerFn({ method: "POST" })
   .validator(z.object({ code: z.string().min(1) }))
   .handler(async ({ data, context }) => {
     const tokens = await exchangeCodeForTokens(data.code);
-    await saveGmailTokens(context.userId, tokens);
+    await saveGmailTokens(context.userId, tokens, context.supabase);
     return { ok: true as const };
   });
 
@@ -35,7 +35,7 @@ export const procesarGmailCallback = createServerFn({ method: "POST" })
 export const desconectarGmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await disconnectGmail(context.userId);
+    await disconnectGmail(context.userId, context.supabase);
     return { ok: true as const };
   });
 
@@ -43,5 +43,5 @@ export const desconectarGmail = createServerFn({ method: "POST" })
 export const verificarEstadoGmail = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    return isGmailConnected(context.userId);
+    return isGmailConnected(context.userId, context.supabase);
   });
