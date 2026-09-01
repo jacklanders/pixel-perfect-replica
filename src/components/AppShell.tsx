@@ -35,6 +35,16 @@ export function AppShell({
 
   const usedToday = uso?.used_today ?? 0;
   const limit = uso?.limit ?? 2;
+  const resetAt = uso?.reset_at;
+
+  function formatearReset(resetAt?: string): string {
+    if (!resetAt) return "";
+    return new Date(resetAt).toLocaleDateString("es-AR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    });
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -75,6 +85,11 @@ export function AppShell({
               )}
             </p>
             <p className="text-xs text-muted-foreground">postulaciones enviadas hoy</p>
+            {resetAt ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Se renueva el {formatearReset(resetAt)}
+              </p>
+            ) : null}
             <p className="mt-3 text-xs text-muted-foreground">
               Mejorar tu CV con Jack es siempre gratis y sin límite.
             </p>

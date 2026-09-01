@@ -176,10 +176,17 @@ export const getUsoDiario = createServerFn({ method: "GET" })
       .maybeSingle();
 
     if (error) throw new Error(error.message);
+
+    // El límite se renueva a la medianoche del día siguiente (hora local).
+    const ahora = new Date();
+    const manana = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() + 1);
+    const used = data?.application_generations ?? 0;
+
     return {
-      used_today: data?.application_generations ?? 0,
-      remaining_today: Math.max(0, 2 - (data?.application_generations ?? 0)),
+      used_today: used,
+      remaining_today: Math.max(0, 2 - used),
       limit: 2,
+      reset_at: manana.toISOString(),
     };
   });
 

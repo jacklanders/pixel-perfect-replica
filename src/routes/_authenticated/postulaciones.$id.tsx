@@ -164,6 +164,16 @@ function formatearFecha(fecha: string | null): string {
   return new Date(fecha).toLocaleDateString("es-AR");
 }
 
+function formatearReset(resetAt: string | undefined): string {
+  if (!resetAt) return "Mañana se renueva.";
+  const reset = new Date(resetAt);
+  return `Se renueva ${reset.toLocaleDateString("es-AR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  })}.`;
+}
+
 function formatearBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -545,7 +555,11 @@ function DetallePostulacion() {
       {/* ─── Header ─── */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <Badge className={estadoStyles[app.status]}>{estadoLabel[app.status]}</Badge>
-        <Badge variant="secondary" className="rounded-full px-3 py-1">
+        <Badge
+          variant="secondary"
+          className="rounded-full px-3 py-1"
+          title={formatearReset(uso?.reset_at)}
+        >
           {enviados} / {limite} mails hoy
         </Badge>
         {vencido ? (
@@ -771,7 +785,7 @@ function DetallePostulacion() {
             <div className="rounded-xl border border-border bg-muted p-4 text-sm">
               <p className="font-medium">Llegaste al límite gratuito de hoy</p>
               <p className="mt-1 text-muted-foreground">
-                Podés enviar {limite} postulaciones por día. Mañana se renueva.
+                Podés enviar {limite} postulaciones por día. {formatearReset(uso?.reset_at)}
               </p>
             </div>
           ) : null}

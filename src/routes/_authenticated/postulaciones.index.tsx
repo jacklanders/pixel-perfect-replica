@@ -162,7 +162,19 @@ function PostulacionesPage() {
             aria-label="Buscar postulaciones"
           />
         </div>
-        <Badge variant="secondary" className="rounded-full px-3 py-1">
+        <Badge
+          variant="secondary"
+          className="rounded-full px-3 py-1"
+          title={
+            uso?.reset_at
+              ? `Se renueva el ${new Date(uso.reset_at).toLocaleDateString("es-AR", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                })}`
+              : undefined
+          }
+        >
           {usoPending ? (
             <Loader2 className="size-3 animate-spin" />
           ) : (
