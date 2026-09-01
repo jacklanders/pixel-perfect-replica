@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
 
@@ -187,16 +188,21 @@ import {
   enviarEmailGmailSchema,
   type EnviarEmailGmailInput,
 } from "@/lib/server/enviar-postulacion-email";
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit";
+
+// Rate limit anti-spam por IP en el envío real de correos.
+const EMAIL_SEND_RATE_LIMIT = { limit: 5, windowMs: 60_000 };
 
 // ─── Enviar postulación REAL vía Gmail API ───
 export const enviarEmailGmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator(enviarEmailGmailSchema)
-  .handler(async ({ data, context }) =>
-    enviarEmailGmailCore({
+  .handler(async ({ data, context }) => {
+    checkRateLimit(getClientIp(getRequest()), EMAIL_SEND_RATE_LIMIT);
+    return enviarEmailGmailCore({
       supabase: context.supabase,
       userId: context.userId,
       email: context.email,
       data,
-    }),
-  );
+    });
+  });
