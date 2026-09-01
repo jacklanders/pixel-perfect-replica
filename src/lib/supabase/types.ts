@@ -84,6 +84,9 @@ export interface CvContacto {
   ubicacion?: string | undefined;
 }
 
+/** Plantillas de exportación de CV disponibles para el PDF. */
+export type PlantillaCv = "clasica" | "moderna";
+
 export interface CvContenido {
   titular: string;
   perfil: string;
@@ -93,6 +96,10 @@ export interface CvContenido {
   contacto?: CvContacto | undefined;
   educacion: CvEducacion[];
   habilidades: CvHabilidadCategoria[];
+  /** Plantilla de exportación elegida por el usuario. */
+  plantilla?: PlantillaCv | undefined;
+  /** Foto del CV como dataURL (data:image/...;base64,...). */
+  fotoBase64?: string | undefined;
 }
 
 export const CV_CONTENIDO_VACIO: CvContenido = {
@@ -168,6 +175,11 @@ export function normalizarContenidoCv(value: Json | null | undefined): CvConteni
           : [],
       }))
       .filter((h) => h.categoria !== "" && h.items.length > 0),
+    plantilla:
+      raw["plantilla"] === "clasica" || raw["plantilla"] === "moderna"
+        ? (raw["plantilla"] as "clasica" | "moderna")
+        : undefined,
+    fotoBase64: typeof raw["fotoBase64"] === "string" ? raw["fotoBase64"] : undefined,
   };
 }
 

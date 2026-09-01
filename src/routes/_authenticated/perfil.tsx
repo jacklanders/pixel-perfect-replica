@@ -1,7 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, Loader2, TriangleAlert, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -14,8 +14,25 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
-import { getMiPerfil, guardarPerfil, subirAvatar, quitarAvatar } from "@/lib/perfil.functions";
+import {
+  getMiPerfil,
+  guardarPerfil,
+  subirAvatar,
+  quitarAvatar,
+  eliminarCuenta,
+} from "@/lib/perfil.functions";
 import { PERFIL_VACIO, completitudPerfil, firmaSugerida, type Perfil } from "@/lib/perfil.model";
 import { useAuth, nombreVisible, iniciales } from "@/hooks/useAuth";
 
@@ -42,10 +59,12 @@ const perfilQueryKey = ["perfil"];
 
 function PerfilPage() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const fetchPerfil = useServerFn(getMiPerfil);
   const savePerfil = useServerFn(guardarPerfil);
+  const deleteCuentaFn = useServerFn(eliminarCuenta);
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: perfilQueryKey,
@@ -60,6 +79,19 @@ function PerfilPage() {
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "No se pudo guardar el perfil");
+    },
+  });
+
+  const eliminarCuentaMutation = useMutation({
+    mutationFn: () => deleteCuentaFn(),
+    onSuccess: async () => {
+      toast.success("Cuenta eliminada. Esperamos verte pronto.");
+      queryClient.clear();
+      await signOut();
+      navigate({ to: "/login" });
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "No se pudo eliminar la cuenta");
     },
   });
 
@@ -99,6 +131,8 @@ function PerfilPage() {
         perfil={perfilNormalizado}
         onSubmit={(p) => mutation.mutate(p)}
         guardando={mutation.isPending}
+        eliminando={eliminarCuentaMutation.isPending}
+        onEliminarCuenta={() => eliminarCuentaMutation.mutate()}
       />
     </AppShell>
   );
@@ -108,10 +142,14 @@ function PerfilForm({
   perfil,
   onSubmit,
   guardando,
+  eliminando,
+  onEliminarCuenta,
 }: {
   perfil: Perfil;
   onSubmit: (p: Perfil) => void;
   guardando: boolean;
+  eliminando: boolean;
+  onEliminarCuenta: () => void;
 }) {
   const { user } = useAuth();
   const [form, setForm] = useState<Perfil>(perfil);
@@ -387,6 +425,53 @@ function PerfilForm({
           >
             Restaurar firma sugerida
           </Button>
+        </section>
+
+        <section className="rounded-2xl border border-destructive/30 bg-card p-6 shadow-soft">
+          <div className="flex items-center gap-2">
+            <TriangleAlert className="size-4 text-destructive" />
+            <p className="text-sm font-medium">Zona de riesgo</p>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Eliminar tu cuenta borra tus CVs, postulaciones, datos de perfil y archivos en forma
+            permanente. Esta acción no se puede deshacer.
+          </p>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="mt-4"
+                disabled={eliminando}
+              >
+                {eliminando ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : null}
+                Eliminar mi cuenta
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>¿Eliminar tu cuenta?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Se borrarán todos tus CVs, postulaciones, datos de perfil y archivos guardados.
+                  Esta acción es permanente y no se puede deshacer.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={eliminando}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onEliminarCuenta();
+                  }}
+                >
+                  {eliminando ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : null}
+                  Sí, eliminar todo
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </section>
       </div>
     </form>

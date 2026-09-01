@@ -44,6 +44,8 @@ export const contenidoCvSchema = z.object({
   contacto: contactoCvSchema.optional(),
   educacion: z.array(educacionSchema).max(30).default([]),
   habilidades: z.array(habilidadCategoriaSchema).max(30).default([]),
+  plantilla: z.enum(["clasica", "moderna"]).optional(),
+  fotoBase64: z.string().max(6000000).optional(),
 });
 
 export const guardarCvSchema = z.object({

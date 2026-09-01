@@ -178,3 +178,37 @@ export const quitarAvatar = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { avatarUrl: null };
   });
+
+// ─── Eliminar cuenta ───
+// Borra TODO: filas en cascada (resumes, job_posts, applications, daily_usage,
+// oauth_connections, etc., todas con `on delete cascade` desde auth.users) y los
+// archivos de Storage del usuario (bucket "resumes" y "avatars"), que NO tienen
+// FK y deben limpiarse explícitamente.
+export const eliminarCuenta = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ ok: true }> => {
+    const userId = context.userId;
+    const service = getServiceClient();
+
+    // 1. Storage: borrar carpetas completas del usuario en ambos buckets.
+    for (const bucket of ["resumes", "avatars"] as const) {
+      const { data: archivos, error: listError } = await service.storage
+        .from(bucket)
+        .list(userId, { limit: 1000 });
+      if (listError) throw new Error(`No se pudo listar archivos: ${listError.message}`);
+      const paths = (archivos ?? [])
+        .filter((f) => f.name !== ".emptyFolderPlaceholder" && f.id)
+        .map((f) => `${userId}/${f.name}`);
+      if (paths.length) {
+        const { error: removeError } = await service.storage.from(bucket).remove(paths);
+        if (removeError) throw new Error(`No se pudieron borrar archivos: ${removeError.message}`);
+      }
+    }
+
+    // 2. Borrar el usuario de Auth: las tablas con FK `on delete cascade`
+    //    limpian todos los datos asociados automáticamente.
+    const { error: deleteError } = await service.auth.admin.deleteUser(userId);
+    if (deleteError) throw new Error(deleteError.message);
+
+    return { ok: true };
+  });

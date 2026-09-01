@@ -23,6 +23,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { type Cv } from "@/lib/cv.model";
 import { getCvPrimario, getCvById, guardarCv, crearCv } from "@/lib/cv.functions";
@@ -31,6 +39,7 @@ import { getMiPerfil } from "@/lib/perfil.functions";
 import { useAuth } from "@/hooks/useAuth";
 import { iniciales, nombreVisible } from "@/hooks/useAuth";
 import { CvDiff } from "@/components/cv-diff";
+import { PLANTILLAS_CV } from "@/lib/cv-pdf-core";
 
 export const Route = createFileRoute("/_authenticated/cv")({
   validateSearch: (search: Record<string, unknown>) =>
@@ -315,12 +324,28 @@ function CvEditorPage() {
   const updateExperiencia = (
     idx: number,
     field: keyof Cv["contenido"]["experiencia"][number],
-    value: string,
+    value: string | boolean | undefined,
   ) => {
     setForm((prev) => {
       if (!prev) return prev;
       const exp = prev.contenido.experiencia.map((item, i) =>
         i === idx ? ({ ...item, [field]: value } as Cv["contenido"]["experiencia"][number]) : item,
+      );
+      return { ...prev, contenido: { ...prev.contenido, experiencia: exp } };
+    });
+  };
+
+  const toggleActualmente = (idx: number) => {
+    setForm((prev) => {
+      if (!prev) return prev;
+      const exp = prev.contenido.experiencia.map((item, i) =>
+        i === idx
+          ? ({
+              ...item,
+              actualmente: !(item.actualmente ?? false),
+              fechaFin: item.actualmente ? item.fechaFin : undefined,
+            } as Cv["contenido"]["experiencia"][number])
+          : item,
       );
       return { ...prev, contenido: { ...prev.contenido, experiencia: exp } };
     });
@@ -337,6 +362,116 @@ function CvEditorPage() {
         },
       };
     });
+  };
+
+  const agregarEducacion = () => {
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            contenido: {
+              ...prev.contenido,
+              educacion: [
+                ...prev.contenido.educacion,
+                { institucion: "", titulo: "", nivel: "", anioFin: "", ubicacion: "" },
+              ],
+            },
+          }
+        : prev,
+    );
+  };
+
+  const updateEducacion = (
+    idx: number,
+    field: keyof Cv["contenido"]["educacion"][number],
+    value: string,
+  ) => {
+    setForm((prev) => {
+      if (!prev) return prev;
+      const edu = prev.contenido.educacion.map((item, i) =>
+        i === idx ? ({ ...item, [field]: value } as Cv["contenido"]["educacion"][number]) : item,
+      );
+      return { ...prev, contenido: { ...prev.contenido, educacion: edu } };
+    });
+  };
+
+  const eliminarEducacion = (idx: number) => {
+    setForm((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        contenido: {
+          ...prev.contenido,
+          educacion: prev.contenido.educacion.filter((_, i) => i !== idx),
+        },
+      };
+    });
+  };
+
+  const agregarCategoriaHabilidad = () => {
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            contenido: {
+              ...prev.contenido,
+              habilidades: [...prev.contenido.habilidades, { categoria: "", items: [] }],
+            },
+          }
+        : prev,
+    );
+  };
+
+  const updateHabilidad = (idx: number, field: "categoria" | "items", value: string) => {
+    setForm((prev) => {
+      if (!prev) return prev;
+      const hab = prev.contenido.habilidades.map((item, i) => {
+        if (i !== idx) return item;
+        if (field === "items") {
+          return {
+            ...item,
+            items: value
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
+          };
+        }
+        return { ...item, categoria: value };
+      });
+      return { ...prev, contenido: { ...prev.contenido, habilidades: hab } };
+    });
+  };
+
+  const eliminarHabilidad = (idx: number) => {
+    setForm((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        contenido: {
+          ...prev.contenido,
+          habilidades: prev.contenido.habilidades.filter((_, i) => i !== idx),
+        },
+      };
+    });
+  };
+
+  const handleFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setForm((prev) =>
+        prev ? { ...prev, contenido: { ...prev.contenido, fotoBase64: dataUrl } } : prev,
+      );
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const quitarFoto = () => {
+    setForm((prev) =>
+      prev ? { ...prev, contenido: { ...prev.contenido, fotoBase64: undefined } } : prev,
+    );
   };
 
   const name = nombreVisible(user);
@@ -398,6 +533,56 @@ function CvEditorPage() {
                   maxLength={3000}
                 />
               </div>
+              <div className="mb-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="plantilla">Plantilla de exportación</Label>
+                  <Select
+                    value={form.contenido.plantilla ?? "clasica"}
+                    onValueChange={(value) =>
+                      updateContenido("plantilla", value as "clasica" | "moderna")
+                    }
+                  >
+                    <SelectTrigger id="plantilla" className="mt-1">
+                      <SelectValue placeholder="Elegí una plantilla" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PLANTILLAS_CV.map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {p === "clasica" ? "Clásica" : "Moderna"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="foto">Foto del CV</Label>
+                  <div className="mt-1 flex items-center gap-3">
+                    {form.contenido.fotoBase64 ? (
+                      <>
+                        <img
+                          src={form.contenido.fotoBase64}
+                          alt="Foto del CV"
+                          className="size-16 rounded-full border border-border object-cover"
+                        />
+                        <Button type="button" variant="ghost" size="sm" onClick={quitarFoto}>
+                          Quitar foto
+                        </Button>
+                      </>
+                    ) : (
+                      <div className="flex w-full items-center gap-2">
+                        <Input
+                          id="foto"
+                          type="file"
+                          accept="image/jpeg,image/png"
+                          onChange={handleFoto}
+                          className="file:text-muted-foreground"
+                        />
+                        <p className="text-xs text-muted-foreground">JPG o PNG</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
@@ -441,6 +626,59 @@ function CvEditorPage() {
                         maxLength={160}
                       />
                     </div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                      <div>
+                        <Label
+                          htmlFor={`exp-inicio-${exp.id}`}
+                          className="mb-1 block text-xs text-muted-foreground"
+                        >
+                          Inicio
+                        </Label>
+                        <Input
+                          id={`exp-inicio-${exp.id}`}
+                          type="month"
+                          value={exp.fechaInicio ?? ""}
+                          onChange={(e) =>
+                            updateExperiencia(idx, "fechaInicio", e.target.value || undefined)
+                          }
+                        />
+                      </div>
+                      <div>
+                        <Label
+                          htmlFor={`exp-fin-${exp.id}`}
+                          className="mb-1 block text-xs text-muted-foreground"
+                        >
+                          Fin
+                        </Label>
+                        <Input
+                          id={`exp-fin-${exp.id}`}
+                          type="month"
+                          value={exp.fechaFin ?? ""}
+                          onChange={(e) =>
+                            updateExperiencia(idx, "fechaFin", e.target.value || undefined)
+                          }
+                          disabled={exp.actualmente ?? false}
+                        />
+                      </div>
+                      <div className="flex items-end pb-1">
+                        <label className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={exp.actualmente ?? false}
+                            onCheckedChange={() => toggleActualmente(idx)}
+                          />
+                          Trabajo acá actualmente
+                        </label>
+                      </div>
+                    </div>
+                    <Input
+                      className="mt-3"
+                      placeholder="Ubicación (opcional)"
+                      value={exp.ubicacion ?? ""}
+                      onChange={(e) =>
+                        updateExperiencia(idx, "ubicacion", e.target.value || undefined)
+                      }
+                      maxLength={160}
+                    />
                     <Textarea
                       placeholder="Descripción de logros y responsabilidades…"
                       value={exp.detalle}
@@ -463,16 +701,127 @@ function CvEditorPage() {
                 ))}
               </div>
             </div>
+
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="font-display text-lg font-bold">Educación</h3>
+                <Button type="button" variant="outline" size="sm" onClick={agregarEducacion}>
+                  + Agregar
+                </Button>
+              </div>
+              <div className="space-y-5">
+                {form.contenido.educacion.map((edu, idx) => (
+                  <div key={idx} className="rounded-xl border border-border bg-muted/40 p-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input
+                        placeholder="Institución"
+                        value={edu.institucion}
+                        onChange={(e) => updateEducacion(idx, "institucion", e.target.value)}
+                        maxLength={160}
+                      />
+                      <Input
+                        placeholder="Título / carrera"
+                        value={edu.titulo}
+                        onChange={(e) => updateEducacion(idx, "titulo", e.target.value)}
+                        maxLength={200}
+                      />
+                      <Input
+                        placeholder="Nivel (ej: universitario)"
+                        value={edu.nivel ?? ""}
+                        onChange={(e) => updateEducacion(idx, "nivel", e.target.value)}
+                        maxLength={80}
+                      />
+                      <Input
+                        placeholder="Año de finalización (o en curso)"
+                        value={edu.anioFin ?? ""}
+                        onChange={(e) => updateEducacion(idx, "anioFin", e.target.value)}
+                        maxLength={40}
+                      />
+                      <Input
+                        className="sm:col-span-2"
+                        placeholder="Ubicación (opcional)"
+                        value={edu.ubicacion ?? ""}
+                        onChange={(e) => updateEducacion(idx, "ubicacion", e.target.value)}
+                        maxLength={160}
+                      />
+                    </div>
+                    <div className="mt-2 flex justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => eliminarEducacion(idx)}
+                      >
+                        Eliminar
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="font-display text-lg font-bold">Habilidades</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={agregarCategoriaHabilidad}
+                >
+                  + Agregar categoría
+                </Button>
+              </div>
+              <div className="space-y-5">
+                {form.contenido.habilidades.map((hab, idx) => (
+                  <div key={idx} className="rounded-xl border border-border bg-muted/40 p-4">
+                    <Input
+                      placeholder="Categoría (ej: Herramientas, Idiomas)"
+                      value={hab.categoria}
+                      onChange={(e) => updateHabilidad(idx, "categoria", e.target.value)}
+                      maxLength={80}
+                    />
+                    <Textarea
+                      className="mt-3"
+                      placeholder="Habilidades separadas por coma (ej: Figma, Photoshop, Illustrator)"
+                      value={hab.items.join(", ")}
+                      onChange={(e) => updateHabilidad(idx, "items", e.target.value)}
+                      rows={2}
+                      maxLength={1000}
+                    />
+                    <div className="mt-2 flex justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => eliminarHabilidad(idx)}
+                      >
+                        Eliminar
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="vista">
             <div className="rounded-2xl border border-border bg-card p-8 shadow-soft">
-              <div className="mb-4 border-b border-border pb-4">
-                <h2 className="font-display text-2xl font-bold">{name || "Sin nombre"}</h2>
-                <p className="text-primary font-medium">{form.contenido.titular}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {user?.email ?? ""} · {perfil?.ubicacion ?? ""} · {perfil?.telefono ?? ""}
-                </p>
+              <div className="mb-4 flex items-start gap-4 border-b border-border pb-4">
+                {form.contenido.fotoBase64 && (
+                  <img
+                    src={form.contenido.fotoBase64}
+                    alt="Foto"
+                    className="size-20 shrink-0 rounded-full border border-border object-cover"
+                  />
+                )}
+                <div>
+                  <h2 className="font-display text-2xl font-bold">{name || "Sin nombre"}</h2>
+                  <p className="text-primary font-medium">{form.contenido.titular}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {user?.email ?? ""} · {perfil?.ubicacion ?? ""} · {perfil?.telefono ?? ""}
+                  </p>
+                </div>
               </div>
               <div className="mb-6">
                 <h3 className="font-display mb-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">
@@ -482,20 +831,70 @@ function CvEditorPage() {
                   {form.contenido.perfil}
                 </p>
               </div>
-              <div>
+              <div className="mb-6">
                 <h3 className="font-display mb-3 text-sm font-bold uppercase tracking-wide text-muted-foreground">
                   Experiencia
                 </h3>
                 <div className="space-y-4">
                   {form.contenido.experiencia.map((exp) => (
                     <div key={exp.id}>
-                      <p className="font-bold">{exp.puesto || "Puesto"}</p>
-                      <p className="text-sm text-muted-foreground">{exp.empresa || "Empresa"}</p>
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <p className="font-bold">{exp.puesto || "Puesto"}</p>
+                        {formatPeriodo(exp.fechaInicio, exp.fechaFin, exp.actualmente) && (
+                          <p className="text-xs text-muted-foreground">
+                            {formatPeriodo(exp.fechaInicio, exp.fechaFin, exp.actualmente)}
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {exp.empresa || "Empresa"}
+                        {exp.ubicacion ? ` · ${exp.ubicacion}` : ""}
+                      </p>
                       <p className="mt-1 whitespace-pre-line text-sm">{exp.detalle}</p>
                     </div>
                   ))}
                 </div>
               </div>
+              {form.contenido.educacion.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="font-display mb-3 text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                    Educación
+                  </h3>
+                  <div className="space-y-3">
+                    {form.contenido.educacion.map((edu, idx) => (
+                      <div key={idx}>
+                        <p className="font-bold">{edu.titulo || "Título"}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {[edu.institucion, edu.nivel, edu.anioFin].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {form.contenido.habilidades.filter((h) => h.items.length > 0).length > 0 && (
+                <div>
+                  <h3 className="font-display mb-3 text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                    Habilidades
+                  </h3>
+                  <div className="space-y-3">
+                    {form.contenido.habilidades
+                      .filter((h) => h.items.length > 0)
+                      .map((hab, idx) => (
+                        <div key={idx}>
+                          <p className="text-sm font-semibold">{hab.categoria}</p>
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {hab.items.map((item) => (
+                              <Badge key={item} variant="secondary">
+                                {item}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>
@@ -616,8 +1015,13 @@ function CvEditorPage() {
               type="button"
               onClick={() => {
                 if (!form) return;
+                const plantilla = form.contenido.plantilla ?? "clasica";
+                const fotoBase64 = form.contenido.fotoBase64;
                 import("@/lib/cv.export").then(({ descargarPdf }) => {
-                  descargarPdf(form, perfil ?? null, name || "");
+                  descargarPdf(form, perfil ?? null, name || "", {
+                    plantilla,
+                    ...(fotoBase64 ? { fotoBase64 } : {}),
+                  });
                 });
               }}
             >
@@ -641,6 +1045,38 @@ function CvEditorPage() {
       </div>
     </AppShell>
   );
+}
+
+function formatPeriodo(
+  fechaInicio?: string,
+  fechaFin?: string,
+  actualmente?: boolean,
+): string | null {
+  if (!fechaInicio && !fechaFin && !actualmente) return null;
+  const inicio = fechaInicio ? mesNombreCorto(fechaInicio) : "—";
+  const fin = actualmente ? "actualidad" : fechaFin ? mesNombreCorto(fechaFin) : "—";
+  return `${inicio} – ${fin}`;
+}
+
+function mesNombreCorto(isoYM: string): string {
+  const match = /^(\d{4})-(\d{2})/.exec(isoYM);
+  if (!match) return isoYM;
+  const meses = [
+    "ene",
+    "feb",
+    "mar",
+    "abr",
+    "may",
+    "jun",
+    "jul",
+    "ago",
+    "sep",
+    "oct",
+    "nov",
+    "dic",
+  ];
+  const mes = Number(match[2]);
+  return `${meses[mes - 1] ?? match[2]}. ${match[1]}`;
 }
 
 function CvSkeleton() {

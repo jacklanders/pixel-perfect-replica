@@ -1,105 +1,42 @@
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
 import { saveAs } from "file-saver";
+import { generarPdf, type PlantillaCv } from "@/lib/cv-pdf-core";
 import type { Cv } from "@/lib/cv.model";
 import type { Perfil } from "@/lib/perfil.model";
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString("es-AR");
-  } catch {
-    return iso;
-  }
+export interface OpcionesDescarga {
+  plantilla?: PlantillaCv;
+  /** dataURL de la foto del CV (data:image/...;base64,...) */
+  fotoBase64?: string | null;
 }
 
-export async function descargarPdf(cv: Cv, perfil: Perfil | null, nombre: string) {
-  const pdfDoc = await PDFDocument.create();
-  let page = pdfDoc.addPage([595.28, 841.89]); // A4
-  let { width, height } = page.getSize();
-  const margin = 50;
-  let y = height - margin;
-
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-  const drawText = (text: string, size: number, bold = false, color = rgb(0.1, 0.1, 0.1)) => {
-    const f = bold ? fontBold : font;
-    page.drawText(text, { x: margin, y, size, font: f, color });
-    y -= size * 1.4;
-  };
-
-  const drawLine = () => {
-    y -= 4;
-    page.drawLine({
-      start: { x: margin, y },
-      end: { x: width - margin, y },
-      thickness: 0.5,
-      color: rgb(0.75, 0.75, 0.75),
-    });
-    y -= 12;
-  };
-
-  // Header
-  drawText(nombre || "Sin nombre", 22, true);
-  drawText(cv.contenido.titular || "Resumen profesional", 12, false, rgb(0.35, 0.35, 0.35));
-  const contacto = [perfil?.email, perfil?.ubicacion, perfil?.telefono].filter(Boolean).join(" · ");
-  if (contacto) drawText(contacto, 10, false, rgb(0.45, 0.45, 0.45));
-  y -= 10;
-  drawLine();
-
-  // Perfil
-  drawText("PERFIL PROFESIONAL", 11, true, rgb(0.2, 0.2, 0.2));
-  const perfilLines = splitLines(cv.contenido.perfil || "", 75);
-  perfilLines.forEach((line) => drawText(line, 10));
-  y -= 8;
-  drawLine();
-
-  // Experiencia
-  drawText("EXPERIENCIA", 11, true, rgb(0.2, 0.2, 0.2));
-  cv.contenido.experiencia.forEach((exp) => {
-    if (y < 120) {
-      // Nueva página si no hay espacio
-      const newPage = pdfDoc.addPage([595.28, 841.89]);
-      // No puedo reasignar page fácilmente, simplificamos: dejamos que se corte
-      // Para producción se pagina mejor
-    }
-    drawText(exp.puesto || "Puesto", 11, true);
-    drawText(exp.empresa || "Empresa", 10, false, rgb(0.4, 0.4, 0.4));
-    const detalleLines = splitLines(exp.detalle || "", 80);
-    detalleLines.forEach((line) => drawText("  " + line, 10));
-    y -= 6;
+export async function descargarPdf(
+  cv: Cv,
+  perfil: Perfil | null,
+  nombre: string,
+  opciones: OpcionesDescarga = {},
+) {
+  const bytes = await generarPdf({
+    cv,
+    perfil,
+    nombre,
+    plantilla: opciones.plantilla,
+    fotoBase64: opciones.fotoBase64,
   });
-  // Skills
-  if (perfil?.skills?.length) {
-    if (y < 100) {
-      page = pdfDoc.addPage([595.28, 841.89]);
-      ({ width, height } = page.getSize());
-      y = height - margin;
-    }
-    drawText("HABILIDADES", 11, true, rgb(0.2, 0.2, 0.2));
-    const skillsText = perfil.skills.join(" · ");
-    const skillLines = splitLines(skillsText, 85);
-    skillLines.forEach((line) => drawText(line, 10));
-    y -= 8;
-    drawLine();
-  }
-  // Footer
-  y = 40;
-  page.drawText(`Generado por Jack · ${formatDate(new Date().toISOString())}`, {
-    x: margin,
-    y,
-    size: 8,
-    font,
-    color: rgb(0.5, 0.5, 0.5),
-  });
-
-  const bytes = await pdfDoc.save();
   const blob = new Blob([bytes as unknown as ArrayBuffer], { type: "application/pdf" });
   saveAs(blob, `${cv.title || "CV"}.pdf`);
 }
 
 export async function descargarDocx(cv: Cv, perfil: Perfil | null, nombre: string) {
-  const contacto = [perfil?.email, perfil?.ubicacion, perfil?.telefono].filter(Boolean).join(" · ");
+  const contenido = cv.contenido;
+  const contacto = [
+    perfil?.email,
+    contenido.contacto?.telefono || perfil?.telefono,
+    contenido.contacto?.ubicacion || perfil?.ubicacion,
+    contenido.disponibilidad ? `Disponibilidad: ${contenido.disponibilidad}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const children: Paragraph[] = [
     new Paragraph({
@@ -110,7 +47,7 @@ export async function descargarDocx(cv: Cv, perfil: Perfil | null, nombre: strin
     new Paragraph({
       children: [
         new TextRun({
-          text: cv.contenido.titular || "Resumen profesional",
+          text: contenido.titular || "Resumen profesional",
           bold: true,
           color: "555555",
         }),
@@ -135,7 +72,7 @@ export async function descargarDocx(cv: Cv, perfil: Perfil | null, nombre: strin
       spacing: { before: 200, after: 120 },
     }),
     new Paragraph({
-      children: (cv.contenido.perfil || "")
+      children: (contenido.perfil || "")
         .split("\n")
         .map((line) => new TextRun({ text: line, break: 1 })),
       spacing: { after: 200 },
@@ -147,14 +84,23 @@ export async function descargarDocx(cv: Cv, perfil: Perfil | null, nombre: strin
     }),
   );
 
-  cv.contenido.experiencia.forEach((exp) => {
+  contenido.experiencia.forEach((exp) => {
+    const fecha = [exp.fechaInicio, exp.actualmente ? "actualidad" : exp.fechaFin]
+      .filter(Boolean)
+      .join(" - ");
+    const lugar = [exp.empresa, exp.ubicacion].filter(Boolean).join(" · ");
     children.push(
       new Paragraph({
         children: [new TextRun({ text: exp.puesto || "Puesto", bold: true })],
         spacing: { before: 120, after: 40 },
       }),
       new Paragraph({
-        children: [new TextRun({ text: exp.empresa || "Empresa", italics: true, color: "666666" })],
+        children: [
+          new TextRun({ text: lugar, italics: true, color: "666666" }),
+          fecha
+            ? new TextRun({ text: `  (${fecha})`, color: "888888" })
+            : new TextRun({ text: "" }),
+        ],
         spacing: { after: 60 },
       }),
       new Paragraph({
@@ -165,18 +111,59 @@ export async function descargarDocx(cv: Cv, perfil: Perfil | null, nombre: strin
       }),
     );
   });
-  if (perfil?.skills?.length) {
+
+  if (contenido.educacion.length) {
+    children.push(
+      new Paragraph({
+        text: "EDUCACIÓN",
+        heading: HeadingLevel.HEADING_2,
+        spacing: { before: 200, after: 120 },
+      }),
+    );
+    contenido.educacion.forEach((edu) => {
+      const meta = [edu.institucion, edu.nivel, edu.anioFin ? `Año: ${edu.anioFin}` : null]
+        .filter(Boolean)
+        .join(" · ");
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: edu.titulo || edu.institucion, bold: true })],
+          spacing: { before: 100, after: 40 },
+        }),
+        meta
+          ? new Paragraph({
+              children: [new TextRun({ text: meta, color: "666666" })],
+              spacing: { after: 120 },
+            })
+          : new Paragraph({ text: "", spacing: { after: 120 } }),
+      );
+    });
+  }
+
+  const habilidades = contenido.habilidades?.length
+    ? contenido.habilidades
+    : perfil?.skills?.length
+      ? [{ categoria: "Habilidades", items: perfil.skills }]
+      : [];
+  if (habilidades.length) {
     children.push(
       new Paragraph({
         text: "HABILIDADES",
         heading: HeadingLevel.HEADING_2,
         spacing: { before: 200, after: 120 },
       }),
-      new Paragraph({
-        children: [new TextRun({ text: perfil.skills.join(" · ") })],
-        spacing: { after: 200 },
-      }),
     );
+    habilidades.forEach((h) => {
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: h.categoria, bold: true })],
+          spacing: { before: 80, after: 40 },
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: h.items.join(" · ") })],
+          spacing: { after: 100 },
+        }),
+      );
+    });
   }
   const doc = new Document({
     sections: [
