@@ -5,22 +5,33 @@
 import { getServiceClient, getEnv } from "./supabase-service";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
-// ─── Config ───
-const GOOGLE_CLIENT_ID = getEnv("GOOGLE_CLIENT_ID") ?? "";
-const GOOGLE_CLIENT_SECRET = getEnv("GOOGLE_CLIENT_SECRET") ?? "";
-const GOOGLE_REDIRECT_URI =
-  getEnv("GOOGLE_REDIRECT_URI") ?? "http://localhost:3000/auth/gmail-callback";
-const OAUTH_ENCRYPTION_KEY =
-  getEnv("OAUTH_ENCRYPTION_KEY") ?? getEnv("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+// ─── Config (lazy: se valida en el primer uso, no al importar el módulo) ───
+// Leer las credenciales en tiempo de importación impedía testear el módulo sin
+// variables de entorno reales. Ahora se resuelven bajo demanda y fallan con un
+// mensaje claro solo cuando realmente se necesitan.
+const GOOGLE_REDIRECT_URI_DEFAULT = "http://localhost:3000/auth/gmail-callback";
 
-if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-  throw new Error("Faltan GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET");
+function getGoogleOAuthConfig(): { clientId: string; clientSecret: string; redirectUri: string } {
+  const clientId = getEnv("GOOGLE_CLIENT_ID") ?? "";
+  const clientSecret = getEnv("GOOGLE_CLIENT_SECRET") ?? "";
+  if (!clientId || !clientSecret) {
+    throw new Error("Faltan GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET");
+  }
+  return {
+    clientId,
+    clientSecret,
+    redirectUri: getEnv("GOOGLE_REDIRECT_URI") ?? GOOGLE_REDIRECT_URI_DEFAULT,
+  };
+}
+
+function getOAuthEncryptionKey(): string {
+  return getEnv("OAUTH_ENCRYPTION_KEY") ?? getEnv("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 }
 
 // ─── Encriptación AES-256-GCM ───
 async function getCryptoKey(): Promise<CryptoKey> {
   const encoder = new TextEncoder();
-  const keyData = encoder.encode(OAUTH_ENCRYPTION_KEY.slice(0, 32).padEnd(32, "0"));
+  const keyData = encoder.encode(getOAuthEncryptionKey().slice(0, 32).padEnd(32, "0"));
   return crypto.subtle.importKey("raw", keyData, { name: "AES-GCM", length: 256 }, false, [
     "encrypt",
     "decrypt",
@@ -69,12 +80,13 @@ export async function exchangeCodeForTokens(code: string): Promise<GoogleTokenRe
     };
   }
 
+  const { clientId, clientSecret, redirectUri } = getGoogleOAuthConfig();
   const params = new URLSearchParams({
     grant_type: "authorization_code",
     code,
-    redirect_uri: GOOGLE_REDIRECT_URI,
-    client_id: GOOGLE_CLIENT_ID,
-    client_secret: GOOGLE_CLIENT_SECRET,
+    redirect_uri: redirectUri,
+    client_id: clientId,
+    client_secret: clientSecret,
   });
 
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -103,11 +115,12 @@ export class GoogleRefreshError extends Error {
 export async function refreshAccessToken(
   refreshToken: string,
 ): Promise<{ access_token: string; expires_in: number }> {
+  const { clientId, clientSecret } = getGoogleOAuthConfig();
   const params = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: refreshToken,
-    client_id: GOOGLE_CLIENT_ID,
-    client_secret: GOOGLE_CLIENT_SECRET,
+    client_id: clientId,
+    client_secret: clientSecret,
   });
 
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -180,9 +193,10 @@ export async function revokeGoogleToken(token: string): Promise<void> {
 
 // ─── Generar URL de autorización ───
 export function buildGmailAuthUrl(state: string): string {
+  const { clientId, redirectUri } = getGoogleOAuthConfig();
   const params = new URLSearchParams({
-    client_id: GOOGLE_CLIENT_ID,
-    redirect_uri: GOOGLE_REDIRECT_URI,
+    client_id: clientId,
+    redirect_uri: redirectUri,
     response_type: "code",
     scope: "https://www.googleapis.com/auth/gmail.send",
     access_type: "offline",
