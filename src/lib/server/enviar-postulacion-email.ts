@@ -33,7 +33,7 @@ export async function enviarEmailGmailCore(argv: {
   email: string;
   data: EnviarEmailGmailInput;
 }): Promise<SerializableRow & { messageId: string }> {
-  const { supabase, userId, email, data } = argv;
+  const { supabase, userId, data } = argv;
 
   // 1. Leer application completa
   const { data: app, error: appError } = await supabase
@@ -61,11 +61,22 @@ export async function enviarEmailGmailCore(argv: {
   // en éxito"). Se confirma (no se revierte) únicamente al marcar como enviada.
   try {
     // 3. Preparar datos del email
+    // El remitente sale del perfil del usuario en la DB (email confirmado), no
+    // del valor de sesión/payload que pudiera llegar manipulable. Así el "From:"
+    // del correo saliente siempre es el email real y verificado del usuario.
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("user_id", userId)
+      .single();
+    if (profileError || !profile?.email) {
+      throw new Error("No se pudo determinar el email del remitente");
+    }
+    const fromEmail = profile.email;
+
     const subject = data.generated_subject ?? app.generated_subject ?? "Postulación";
     const body = data.generated_body ?? app.generated_body ?? "";
     const toEmail = data.destination_email ?? app.destination_email ?? "";
-    const fromEmail = email ?? "";
-    if (!fromEmail) throw new Error("No se pudo determinar el email del remitente");
 
     // 3b. Adjunto: o un archivo temporal subido (PDF/DOCX), o el CV seleccionado.
     // Si el usuario eligió "Subir archivo", forzamos resumeId = null para no duplicar.

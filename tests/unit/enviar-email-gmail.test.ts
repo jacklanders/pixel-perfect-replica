@@ -56,6 +56,7 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
 
     client.handlers["app_settings"] = () => rowResult({ value: "10" });
     client.handlers["oauth_connection_status"] = () => rowResult(null);
+    client.handlers["profiles"] = () => rowResult({ user_id: "user-1", email: "juan@test.com" });
 
     client.handlers["applications"] = (op) => {
       if (op.op === "update") {
