@@ -13,12 +13,43 @@ const mejoraSchema = z.object({
   mejorado: z.object({
     titular: z.string().default(""),
     perfil: z.string().default(""),
+    disponibilidad: z.string().optional(),
+    contacto: z
+      .object({
+        telefono: z.string().optional(),
+        email: z.string().optional(),
+        ubicacion: z.string().optional(),
+      })
+      .optional(),
     experiencia: z
       .array(
         z.object({
           puesto: z.string().default(""),
           empresa: z.string().default(""),
+          fechaInicio: z.string().optional(),
+          fechaFin: z.string().optional(),
+          actualmente: z.boolean().optional(),
+          ubicacion: z.string().optional(),
           detalle: z.string().default(""),
+        }),
+      )
+      .default([]),
+    educacion: z
+      .array(
+        z.object({
+          institucion: z.string().default(""),
+          titulo: z.string().default(""),
+          nivel: z.string().optional(),
+          anioFin: z.string().optional(),
+          ubicacion: z.string().optional(),
+        }),
+      )
+      .default([]),
+    habilidades: z
+      .array(
+        z.object({
+          categoria: z.string().default(""),
+          items: z.array(z.string()).default([]),
         }),
       )
       .default([]),
@@ -46,15 +77,38 @@ function cvATexto(cv: { contenido: CvContenido }, perfil: Perfil | null): string
   const lineas: string[] = [];
   lineas.push(`TITULAR: ${cv.contenido.titular}`);
   lineas.push(`PERFIL: ${cv.contenido.perfil}`);
+  if (cv.contenido.disponibilidad) lineas.push(`DISPONIBILIDAD: ${cv.contenido.disponibilidad}`);
+  if (cv.contenido.contacto?.telefono) lineas.push(`TELÉFONO: ${cv.contenido.contacto.telefono}`);
+  if (cv.contenido.contacto?.email) lineas.push(`EMAIL: ${cv.contenido.contacto.email}`);
+  if (cv.contenido.contacto?.ubicacion)
+    lineas.push(`UBICACIÓN: ${cv.contenido.contacto.ubicacion}`);
   if (perfil?.skills?.length) {
     lineas.push(`HABILIDADES: ${perfil.skills.join(", ")}`);
   }
+  if (cv.contenido.habilidades?.length) {
+    lineas.push(`HABILIDADES POR CATEGORÍA:`);
+    cv.contenido.habilidades.forEach((cat) => {
+      if (cat.categoria) lineas.push(`  ${cat.categoria}: ${cat.items.join(", ")}`);
+    });
+  }
   cv.contenido.experiencia.forEach((exp: CvExperiencia, i: number) => {
+    const fechas = [exp.fechaInicio, exp.actualmente ? "actualidad" : exp.fechaFin]
+      .filter(Boolean)
+      .join(" - ");
     lineas.push(`EXPERIENCIA ${i + 1}:`);
     lineas.push(`  Puesto: ${exp.puesto}`);
     lineas.push(`  Empresa: ${exp.empresa}`);
+    if (fechas) lineas.push(`  Fechas: ${fechas}`);
+    if (exp.ubicacion) lineas.push(`  Ubicación: ${exp.ubicacion}`);
     lineas.push(`  Detalle: ${exp.detalle}`);
   });
+  if (cv.contenido.educacion?.length) {
+    lineas.push(`FORMACIÓN:`);
+    cv.contenido.educacion.forEach((edu) => {
+      const anio = edu.anioFin ? ` (${edu.anioFin})` : "";
+      lineas.push(`  ${edu.titulo}${anio}${edu.institucion ? ` — ${edu.institucion}` : ""}`);
+    });
+  }
   return lineas.join("\n");
 }
 
@@ -147,12 +201,43 @@ export const mejorarCvConJack = createServerFn({ method: "POST" })
       mejorado: {
         titular: resultado.mejorado.titular,
         perfil: resultado.mejorado.perfil,
+        disponibilidad: resultado.mejorado.disponibilidad?.trim() || undefined,
+        contacto:
+          resultado.mejorado.contacto &&
+          (resultado.mejorado.contacto.telefono ||
+            resultado.mejorado.contacto.email ||
+            resultado.mejorado.contacto.ubicacion)
+            ? {
+                telefono: resultado.mejorado.contacto.telefono?.trim() || undefined,
+                email: resultado.mejorado.contacto.email?.trim() || undefined,
+                ubicacion: resultado.mejorado.contacto.ubicacion?.trim() || undefined,
+              }
+            : undefined,
         experiencia: resultado.mejorado.experiencia.map((exp) => ({
           id: generarId(),
           puesto: exp.puesto,
           empresa: exp.empresa,
+          fechaInicio: exp.fechaInicio?.trim() || undefined,
+          fechaFin: exp.fechaFin?.trim() || undefined,
+          actualmente: exp.actualmente === true ? true : undefined,
+          ubicacion: exp.ubicacion?.trim() || undefined,
           detalle: exp.detalle,
         })),
+        educacion: resultado.mejorado.educacion
+          .map((edu) => ({
+            institucion: edu.institucion,
+            titulo: edu.titulo,
+            nivel: edu.nivel?.trim() || undefined,
+            anioFin: edu.anioFin?.trim() || undefined,
+            ubicacion: edu.ubicacion?.trim() || undefined,
+          }))
+          .filter((edu) => edu.institucion !== "" || edu.titulo !== ""),
+        habilidades: resultado.mejorado.habilidades
+          .map((h) => ({
+            categoria: h.categoria,
+            items: h.items,
+          }))
+          .filter((h) => h.categoria !== "" && h.items.length > 0),
       },
       cambios: resultado.cambios,
       preguntas: resultado.preguntas,

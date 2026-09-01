@@ -121,6 +121,8 @@ function CvEditorPage() {
             titular: perfil?.rubroObjetivo ? perfil.rubroObjetivo : "Resumen profesional",
             perfil: "",
             experiencia: [{ id: crypto.randomUUID(), puesto: "", empresa: "", detalle: "" }],
+            educacion: [],
+            habilidades: [],
           },
         };
         await saveCv({

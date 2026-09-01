@@ -11,12 +11,39 @@ export const experienciaSchema = z.object({
   puesto: z.string().max(160).default(""),
   empresa: z.string().max(160).default(""),
   detalle: z.string().max(2000).default(""),
+  fechaInicio: z.string().max(40).optional(),
+  fechaFin: z.string().max(40).optional(),
+  actualmente: z.boolean().optional(),
+  ubicacion: z.string().max(160).optional(),
+});
+
+export const educacionSchema = z.object({
+  institucion: z.string().max(200).default(""),
+  titulo: z.string().max(200).default(""),
+  nivel: z.string().max(40).optional(),
+  anioFin: z.string().max(40).optional(),
+  ubicacion: z.string().max(160).optional(),
+});
+
+export const habilidadCategoriaSchema = z.object({
+  categoria: z.string().max(160).default(""),
+  items: z.array(z.string().max(120)).max(100).default([]),
+});
+
+export const contactoCvSchema = z.object({
+  telefono: z.string().max(80).optional(),
+  email: z.string().max(200).optional(),
+  ubicacion: z.string().max(160).optional(),
 });
 
 export const contenidoCvSchema = z.object({
   titular: z.string().max(200).default(""),
   perfil: z.string().max(3000).default(""),
   experiencia: z.array(experienciaSchema).max(30).default([]),
+  disponibilidad: z.string().max(160).optional(),
+  contacto: contactoCvSchema.optional(),
+  educacion: z.array(educacionSchema).max(30).default([]),
+  habilidades: z.array(habilidadCategoriaSchema).max(30).default([]),
 });
 
 export const guardarCvSchema = z.object({

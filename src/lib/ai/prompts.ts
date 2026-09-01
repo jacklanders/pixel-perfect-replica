@@ -19,10 +19,16 @@ REGLAS DE MEJORA DE CV:
 - Agregá un párrafo de "Perfil profesional" que resuma experiencia y fortalezas.
 - Quitá datos innecesarios o sensibles que no aportan al puesto.
 - No incluyas teléfonos ni direcciones de referencia de empleadores anteriores.
-- Agrupá habilidades por categoría.
+- Agrupá habilidades por categoría (técnica/funcional).
 - Evitá frases negativas; reformulá en positivo.
+- Reformulá períodos de desempleo o búsqueda laboral en positivo, por ejemplo
+  "desempleado" pasa a describirse como "disponibilidad inmediata" o "en transición
+  activa hacia el próximo rol". Nunca mientas sobre fechas ni inventes empleos.
+- Ordená siempre la experiencia en orden cronológico inverso (de más reciente a más antiguo).
 - Usá verbos de acción al inicio de cada bullet de experiencia.
 - Destacá logros cuantificables cuando sea posible.
+- Incluí una sección de Formación/Educación ordenada de la más reciente a la más antigua.
+- Adecuá la redacción a un puesto concreto cuando se conozca el rubro objetivo.
 `.trim();
 
 export const PROMPT_RESUME_IMPROVEMENT = (cvTexto: string, perfilTexto: string) =>
@@ -40,11 +46,36 @@ Respondé ÚNICAMENTE con un JSON válido (sin markdown, sin bloques de código)
   "mejorado": {
     "titular": "string",
     "perfil": "string",
+    "disponibilidad": "string (opcional)",
+    "contacto": {
+      "telefono": "string (opcional)",
+      "email": "string (opcional)",
+      "ubicacion": "string (opcional)"
+    },
     "experiencia": [
       {
         "puesto": "string",
         "empresa": "string",
+        "fechaInicio": "string (opcional)",
+        "fechaFin": "string (opcional)",
+        "actualmente": "boolean (opcional)",
+        "ubicacion": "string (opcional)",
         "detalle": "string"
+      }
+    ],
+    "educacion": [
+      {
+        "institucion": "string",
+        "titulo": "string",
+        "nivel": "string (opcional)",
+        "anioFin": "string (opcional)",
+        "ubicacion": "string (opcional)"
+      }
+    ],
+    "habilidades": [
+      {
+        "categoria": "string",
+        "items": ["string"]
       }
     ]
   },
@@ -78,18 +109,46 @@ Respondé ÚNICAMENTE con un JSON válido (sin markdown, sin bloques de código)
 {
   "titular": "string (rubro/rol objetivo, máximo 200 caracteres)",
   "perfil": "string (resumen profesional de 1-2 párrafos, máximo 3000 caracteres)",
+  "disponibilidad": "string (disponibilidad laboral: inmediata, 15 días, negociable… o vacío si no figura)",
+  "contacto": {
+    "telefono": "string (solo si figura en el texto)",
+    "email": "string (solo si figura en el texto)",
+    "ubicacion": "string (ciudad/país, solo si figura)"
+  },
   "experiencia": [
     {
       "puesto": "string",
       "empresa": "string",
+      "fechaInicio": "string (formato AAAA-MM o AAAA cuando sea posible)",
+      "fechaFin": "string (formato AAAA-MM, 'actualidad'/'presente' si el puesto es actual)",
+      "actualmente": "boolean (true solo si el puesto es el empleo actual)",
+      "ubicacion": "string (ciudad, solo si figura)",
       "detalle": "string (logros y responsabilidades, máximo 2000 caracteres)"
+    }
+  ],
+  "educacion": [
+    {
+      "institucion": "string",
+      "titulo": "string",
+      "nivel": "string (secundario/terciario/universitario/posgrado/curso)",
+      "anioFin": "string (año de finalización, o vacío si está en curso)",
+      "ubicacion": "string (opcional)"
+    }
+  ],
+  "habilidades": [
+    {
+      "categoria": "string (ej: Lenguajes, Frameworks, Herramientas, Soft skills)",
+      "items": ["string"]
     }
   ]
 }
 
 Reglas del JSON:
-- Extraé SOLO lo que exista en el texto: no inventes experiencias, puestos ni empresas.
-- Si no hay sección clara de experiencia, devolvé un array vacío.
+- Extraé SOLO lo que exista en el texto: no inventes experiencias, puestos, empresas, títulos, fechas ni habilidades.
+- Ordená "experiencia" en orden cronológico inverso (más reciente primero) y "educacion" de la más reciente a la más antigua.
+- Si "actualmente" es true, no pongas fechaFin.
+- Reformulá "desempleado" como "disponibilidad inmediata" en el campo "disponibilidad".
+- No incluyas datos sensibles (DNI, domicilios exactos, teléfonos o direcciones de referencia de terceros, estado civil).
+- "educacion", "habilidades" y "contacto" pueden ser arrays/objeto vacíos o ausentes si no hay datos.
 - Si el texto está vacío o es ilegible, devolvé todos los campos vacíos.
-- No incluyas datos sensibles (DNI, domicilios exactos, referencias).
 `.trim();
