@@ -56,54 +56,68 @@ export async function enviarEmailGmailCore(argv: {
     throw new Error("Límite diario alcanzado. Podés generar hasta 2 postulaciones por día.");
   }
 
-  // 3. Preparar datos del email
-  const subject = data.generated_subject ?? app.generated_subject ?? "Postulación";
-  const body = data.generated_body ?? app.generated_body ?? "";
-  const toEmail = data.destination_email ?? app.destination_email ?? "";
-  const fromEmail = email ?? "";
-  if (!fromEmail) throw new Error("No se pudo determinar el email del remitente");
+  // A partir de acá la reserva quedó consumida (allowed=true). Si el envío
+  // falla, la liberamos para no gastar cuota en envíos fallidos ("cuota solo
+  // en éxito"). Se confirma (no se revierte) únicamente al marcar como enviada.
+  try {
+    // 3. Preparar datos del email
+    const subject = data.generated_subject ?? app.generated_subject ?? "Postulación";
+    const body = data.generated_body ?? app.generated_body ?? "";
+    const toEmail = data.destination_email ?? app.destination_email ?? "";
+    const fromEmail = email ?? "";
+    if (!fromEmail) throw new Error("No se pudo determinar el email del remitente");
 
-  // 3b. Adjunto: o un archivo temporal subido (PDF/DOCX), o el CV seleccionado.
-  // Si el usuario eligió "Subir archivo", forzamos resumeId = null para no duplicar.
-  const adjunto =
-    data.adjuntoStoragePath && data.adjuntoFileName && data.adjuntoMimeType
-      ? {
-          storagePath: data.adjuntoStoragePath,
-          fileName: data.adjuntoFileName,
-          mimeType: data.adjuntoMimeType,
-        }
-      : undefined;
+    // 3b. Adjunto: o un archivo temporal subido (PDF/DOCX), o el CV seleccionado.
+    // Si el usuario eligió "Subir archivo", forzamos resumeId = null para no duplicar.
+    const adjunto =
+      data.adjuntoStoragePath && data.adjuntoFileName && data.adjuntoMimeType
+        ? {
+            storagePath: data.adjuntoStoragePath,
+            fileName: data.adjuntoFileName,
+            mimeType: data.adjuntoMimeType,
+          }
+        : undefined;
 
-  const resumeId = data.resumeId !== undefined ? data.resumeId : app.resume_id;
+    const resumeId = data.resumeId !== undefined ? data.resumeId : app.resume_id;
 
-  // 4. Enviar vía Gmail API
-  const { messageId } = await enviarPostulacionGmail({
-    userId,
-    fromEmail,
-    toEmail,
-    subject,
-    body,
-    resumeId,
-    includeCopy: data.includeCopy ?? false,
-    ...(adjunto ? { adjunto } : {}),
-  });
+    // 4. Enviar vía Gmail API
+    const { messageId } = await enviarPostulacionGmail({
+      userId,
+      fromEmail,
+      toEmail,
+      subject,
+      body,
+      resumeId,
+      includeCopy: data.includeCopy ?? false,
+      ...(adjunto ? { adjunto } : {}),
+    });
 
-  // 5. Marcar como enviada
-  const { data: row, error } = await supabase
-    .from("applications")
-    .update({
-      status: "sent",
-      sent_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      generated_body: data.generated_body,
-      destination_email: data.destination_email,
-      generated_subject: data.generated_subject,
-    })
-    .eq("id", data.applicationId)
-    .eq("user_id", userId)
-    .select()
-    .single();
+    // 5. Marcar como enviada
+    const { data: row, error } = await supabase
+      .from("applications")
+      .update({
+        status: "sent",
+        sent_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        generated_body: data.generated_body,
+        destination_email: data.destination_email,
+        generated_subject: data.generated_subject,
+      })
+      .eq("id", data.applicationId)
+      .eq("user_id", userId)
+      .select()
+      .single();
 
-  if (error) throw new Error(error.message);
-  return { ...row, messageId };
+    if (error) throw new Error(error.message);
+    return { ...row, messageId };
+  } catch (err) {
+    // El envío falló: liberar la reserva de cuota (la revocación no debe dejar
+    // un envío fallido contando en el límite del día).
+    try {
+      await supabase.rpc("decrement_daily_usage");
+    } catch {
+      // La reversión no debe enmascarar el error original del envío.
+    }
+    throw err;
+  }
 }

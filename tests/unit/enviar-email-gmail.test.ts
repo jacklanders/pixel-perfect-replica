@@ -46,11 +46,13 @@ const coreArgs = (client: FakeSupabase, overrides?: Partial<CoreArgs["data"]>): 
 describe("enviarEmailGmailCore (lógica completa del handler)", () => {
   let client: FakeSupabase;
   let fetchStub: ReturnType<typeof vi.fn>;
+  let rpcNames: string[];
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
     client = new FakeSupabase();
     gmailState.client = client;
+    rpcNames = [];
 
     client.handlers["app_settings"] = () => rowResult({ value: "10" });
     client.handlers["oauth_connection_status"] = () => rowResult(null);
@@ -61,7 +63,10 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
       }
       return rowResult(BASE_APP);
     };
-    client.rpcHandler = async () => rowResult([{ allowed: true }]);
+    client.rpcHandler = async (fn) => {
+      rpcNames.push(fn);
+      return rowResult([{ allowed: true }]);
+    };
 
     fetchStub = vi.fn();
     globalThis.fetch = fetchStub as typeof fetch;
@@ -103,6 +108,10 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     // Solo una llamada a la API de Gmail.
     const gmail = fetchStub.mock.calls.filter((c) => String(c[0]).includes("gmail.googleapis.com"));
     expect(gmail).toHaveLength(1);
+
+    // Éxito → la cuota se confirma, no se revierte.
+    expect(rpcNames).toContain("increment_daily_usage");
+    expect(rpcNames).not.toContain("decrement_daily_usage");
   });
 
   it("con adjunto temporal, adjunta, envía y borra de Storage; marca sent_at", async () => {
@@ -164,6 +173,10 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
       (c) => c.op === "upsert" && c.table === "oauth_connection_status",
     );
     expect((statusOp!.payload as { connected: boolean }).connected).toBe(false);
+
+    // El envío falló → la reserva de cuota se libera.
+    expect(rpcNames).toContain("increment_daily_usage");
+    expect(rpcNames).toContain("decrement_daily_usage");
   });
 
   it("bloquea el envío cuando se alcanza el límite diario (RPC false) y no llama a Gmail", async () => {
