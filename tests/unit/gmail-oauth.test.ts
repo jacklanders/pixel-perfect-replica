@@ -163,4 +163,18 @@ describe("gmail-oauth", () => {
       expect(payload.provider).toBe("google_gmail");
     });
   });
+
+  describe("encrypt/decrypt sin clave", () => {
+    it("falla fuerte (no degrada) si falta OAUTH_ENCRYPTION_KEY", async () => {
+      const prev = gmailState.env["OAUTH_ENCRYPTION_KEY"];
+      gmailState.env["OAUTH_ENCRYPTION_KEY"] = undefined;
+
+      await expect(oauth.encrypt("secreto")).rejects.toThrow("Falta OAUTH_ENCRYPTION_KEY");
+      await expect(oauth.decrypt("dXNlci1pZC1pdi1kYXRsb2d1ZQ==")).rejects.toThrow(
+        "Falta OAUTH_ENCRYPTION_KEY",
+      );
+
+      gmailState.env["OAUTH_ENCRYPTION_KEY"] = prev;
+    });
+  });
 });

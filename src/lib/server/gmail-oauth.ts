@@ -24,18 +24,41 @@ function getGoogleOAuthConfig(): { clientId: string; clientSecret: string; redir
   };
 }
 
+// La clave de cifrado de tokens debe existir SIEMPRE. No se degrada a la
+// service role key (son secretos con propósitos distintos: rotar una no debe
+// volver indescifrables los tokens) y no se cae en silencio a una clave vacía
+// predecible. Si falta, se falla fuerte con un mensaje claro.
 function getOAuthEncryptionKey(): string {
-  return getEnv("OAUTH_ENCRYPTION_KEY") ?? getEnv("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const key = getEnv("OAUTH_ENCRYPTION_KEY");
+  if (!key) {
+    throw new Error(
+      "Falta OAUTH_ENCRYPTION_KEY: configurá una clave aleatoria de 32+ bytes " +
+        "(ej. `openssl rand -base64 32`). NO se usa la service role key como fallback.",
+    );
+  }
+  return key;
 }
 
 // ─── Encriptación AES-256-GCM ───
+// La clave se deriva de la cadena de OAUTH_ENCRYPTION_KEY con PBKDF2-HMAC-SHA256
+// en vez de truncar/rellenar el string, que era menos robusto. Nota: cambiar
+// esta derivación invalida los tokens cifrados con la versión anterior.
 async function getCryptoKey(): Promise<CryptoKey> {
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(getOAuthEncryptionKey().slice(0, 32).padEnd(32, "0"));
-  return crypto.subtle.importKey("raw", keyData, { name: "AES-GCM", length: 256 }, false, [
-    "encrypt",
-    "decrypt",
-  ]);
+  const salt = new TextEncoder().encode("jack-gmail-oauth-key-v1");
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(getOAuthEncryptionKey()),
+    "PBKDF2",
+    false,
+    ["deriveKey"],
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: 100_000, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"],
+  );
 }
 
 export async function encrypt(text: string): Promise<string> {

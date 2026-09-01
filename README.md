@@ -190,7 +190,8 @@ Pasos de post-deploy (una vez por dominio):
 - **Límite diario server-side mutex-free:** RPC `increment_daily_usage` por
   `(user_id, usage_date)` con `p_limit=2`; el server (o la UI, proactivamente) rechaza
   el tercer envío con mensaje claro.
-- **Tokens OAuth cifrados con `OAUTH_ENCRYPTION_KEY`** (fallback service_role key en dev);
+- **Tokens OAuth cifrados con `OAUTH_ENCRYPTION_KEY`** (obligatoria, derivación PBKDF2;
+  falla fuerte si falta, sin fallback a la service role key);
   refresh automático 1 min antes de expirar y retry tras 401; token revocado ⇒ se marca
   desconectado y la UI pide reconexión.
 - **Adjuntos:** CV de Jack (PDF on-the-fly) o archivo temporal (PDF/DOCX subido a
