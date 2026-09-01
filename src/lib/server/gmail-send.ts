@@ -239,6 +239,35 @@ async function obtenerAdjuntoArchivo(
   };
 }
 
+// ─── Validación de datos del email ───
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validarDatosEnvio(options: {
+  fromEmail: string;
+  toEmail: string;
+  subject: string;
+  body: string;
+}): void {
+  if (!options.fromEmail.trim()) {
+    throw new Error("No se pudo determinar el email del remitente");
+  }
+  if (!EMAIL_RE.test(options.fromEmail.trim())) {
+    throw new Error("El email del remitente no es válido");
+  }
+  if (!options.toEmail.trim()) {
+    throw new Error("El email del destinatario no puede estar vacío");
+  }
+  if (!EMAIL_RE.test(options.toEmail.trim())) {
+    throw new Error("El email del destinatario no es válido");
+  }
+  if (!options.subject.trim()) {
+    throw new Error("El asunto de la postulación no puede estar vacío");
+  }
+  if (!options.body.trim()) {
+    throw new Error("El cuerpo de la postulación no puede estar vacío");
+  }
+}
+
 // ─── Función principal: enviar postulación por Gmail ───
 export async function enviarPostulacionGmail(options: {
   userId: string;
@@ -250,6 +279,13 @@ export async function enviarPostulacionGmail(options: {
   includeCopy: boolean;
   adjunto?: AdjuntoArchivo | null;
 }): Promise<{ messageId: string }> {
+  validarDatosEnvio({
+    fromEmail: options.fromEmail,
+    toEmail: options.toEmail,
+    subject: options.subject,
+    body: options.body,
+  });
+
   const supabase = getServiceClient();
 
   // 1. Obtener adjunto: archivo temporal (PDF/DOCX subido) o CV guardado

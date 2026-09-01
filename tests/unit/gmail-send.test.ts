@@ -209,6 +209,29 @@ describe("enviarPostulacionGmail", () => {
     expect(updateOp).toBeUndefined();
   });
 
+  it("valida los inputs y falla con mensaje claro sin tocar la red ni la DB", async () => {
+    client.handlers["resumes"] = () => rowResult(RESUMEN_GENERADO);
+    const gmail = vi.fn();
+    fetchStub.mockImplementation(gmail);
+
+    await expect(
+      enviarPostulacionGmail({
+        userId: "user-1",
+        fromEmail: "juan@test.com",
+        toEmail: "  ",
+        subject: "Postulación",
+        body: "Hola",
+        resumeId: null,
+        includeCopy: false,
+        adjunto: null,
+      }),
+    ).rejects.toThrow("El email del destinatario no puede estar vacío");
+
+    // No se llamó a Gmail ni se tocó Storage.
+    expect(gmail).not.toHaveBeenCalled();
+    expect(client.calls).toHaveLength(0);
+  });
+
   it("si el retry falla porque el token está revocado, no se envía y se marca desconectado", async () => {
     client.handlers["resumes"] = () => rowResult(RESUMEN_GENERADO);
 
