@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -12,10 +12,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { getMiPerfil, guardarPerfil } from "@/lib/perfil.functions";
+import { getMiPerfil, guardarPerfil, subirAvatar, quitarAvatar } from "@/lib/perfil.functions";
 import { PERFIL_VACIO, completitudPerfil, firmaSugerida, type Perfil } from "@/lib/perfil.model";
 import { useAuth, nombreVisible, iniciales } from "@/hooks/useAuth";
 
@@ -116,11 +116,62 @@ function PerfilForm({
   const { user } = useAuth();
   const [form, setForm] = useState<Perfil>(perfil);
   const [nuevaSkill, setNuevaSkill] = useState("");
+  const [subiendoAvatar, setSubiendoAvatar] = useState(false);
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+
+  const fetchSubirAvatar = useServerFn(subirAvatar);
+  const fetchQuitarAvatar = useServerFn(quitarAvatar);
 
   // Sincroniza si llegan datos nuevos desde la red (p. ej. alta automática en el primer login).
   useEffect(() => {
     setForm(perfil);
   }, [perfil]);
+
+  const subirAvatarImg = useMutation({
+    mutationFn: async (file: File) => {
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]!);
+      }
+      return fetchSubirAvatar({
+        data: {
+          fileName: file.name,
+          mimeType: file.type,
+          fileBase64: btoa(binary),
+        },
+      });
+    },
+    onMutate: () => setSubiendoAvatar(true),
+    onSuccess: (res) => {
+      setForm((prev) => ({ ...prev, avatarUrl: res?.avatarUrl ?? null }));
+      toast.success("Foto de perfil actualizada");
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "No se pudo actualizar la foto");
+    },
+    onSettled: () => setSubiendoAvatar(false),
+  });
+
+  const quitarAvatarImg = useMutation({
+    mutationFn: () => fetchQuitarAvatar(),
+    onMutate: () => setSubiendoAvatar(true),
+    onSuccess: () => {
+      setForm((prev) => ({ ...prev, avatarUrl: null }));
+      toast.success("Foto de perfil eliminada");
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "No se pudo eliminar la foto");
+    },
+    onSettled: () => setSubiendoAvatar(false),
+  });
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) subirAvatarImg.mutate(file);
+    if (e.target) e.target.value = "";
+  };
 
   const completitud = completitudPerfil(form);
   const firma = form.firmaMail.trim() ? form.firmaMail : firmaSugerida(form);
@@ -150,19 +201,45 @@ function PerfilForm({
   return (
     <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
       <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           <Avatar className="size-14">
+            <AvatarImage src={form.avatarUrl ?? undefined} alt={name} />
             <AvatarFallback className="bg-secondary text-secondary-foreground">
-              {initials}
+              {subiendoAvatar ? <Loader2 className="size-5 animate-spin" /> : initials}
             </AvatarFallback>
           </Avatar>
           <div>
             <p className="font-display text-lg font-bold">{name}</p>
             <p className="text-sm text-muted-foreground">{perfil.email}</p>
           </div>
-          <Button variant="outline" size="sm" className="ml-auto" disabled>
-            Cambiar foto
-          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            <input
+              ref={avatarFileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={subiendoAvatar}
+              onClick={() => avatarFileRef.current?.click()}
+            >
+              {subiendoAvatar ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              Cambiar foto
+            </Button>
+            {form.avatarUrl ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={subiendoAvatar}
+                onClick={() => quitarAvatarImg.mutate()}
+              >
+                Quitar
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         <div className="mt-7 grid gap-4 sm:grid-cols-2">

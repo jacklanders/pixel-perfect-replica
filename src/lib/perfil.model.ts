@@ -15,6 +15,7 @@ export type PerfilInput = z.infer<typeof perfilSchema>;
 
 export interface Perfil extends PerfilInput {
   email: string;
+  avatarUrl?: string | null;
 }
 
 export const PERFIL_VACIO: Perfil = {
@@ -26,6 +27,7 @@ export const PERFIL_VACIO: Perfil = {
   firmaMail: "",
   resumen: "",
   skills: [],
+  avatarUrl: null,
 };
 
 /** Mapea una fila de `profiles` (incluyendo `preferencias` jsonb) al modelo de UI. */
@@ -42,6 +44,7 @@ export function filaAPerfil(fila: Record<string, unknown>): Perfil {
     firmaMail: (fila["firma_mail"] as string | null) ?? "",
     resumen: typeof prefs["resumen"] === "string" ? prefs["resumen"] : "",
     skills: skills.filter((s): s is string => typeof s === "string"),
+    avatarUrl: (fila["avatar_url"] as string | null) ?? null,
   };
 }
 
