@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const authFile = path.join(__dirname, ".auth", "user.json");
 const hasAuth = fs.existsSync(authFile);
+const isMockAuth = process.env.MOCK_AUTH === "true";
 
 test.describe("Páginas públicas", () => {
   test("landing carga sin errores", async ({ page }) => {
@@ -20,9 +21,16 @@ test.describe("Páginas públicas", () => {
 });
 
 test.describe("Flujo de postulaciones (autenticado)", () => {
-  test.skip(!hasAuth, "Saltado: no existe e2e/.auth/user.json. Generalo manualmente.");
+  // Sin MOCK_AUTH se necesita el storageState generado manualmente; con
+  // MOCK_AUTH el servidor ya inyecta la identidad de test, así que no hace falta.
+  test.skip(
+    !hasAuth && !isMockAuth,
+    "Saltado: sin MOCK_AUTH y sin e2e/.auth/user.json. Generalo manualmente.",
+  );
 
-  test.use({ storageState: authFile });
+  if (!isMockAuth) {
+    test.use({ storageState: authFile });
+  }
 
   test("cargar aviso, extraer datos y generar postulación", async ({ page }) => {
     await page.goto("/postulaciones/nueva");

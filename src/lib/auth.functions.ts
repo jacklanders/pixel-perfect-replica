@@ -3,8 +3,16 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export type CurrentUser = { id: string; email: string | null };
 
+const MOCK_USER_ID = "00000000-0000-0000-0000-000000000001";
+const MOCK_USER_EMAIL = "test@jack.local";
+
 export const getCurrentUser = createServerFn({ method: "GET" }).handler(
   async (): Promise<CurrentUser | null> => {
+    // Modo E2E: no depender de un login real con Google en CI.
+    if (typeof process !== "undefined" && process.env && process.env["MOCK_AUTH"] === "true") {
+      return { id: MOCK_USER_ID, email: MOCK_USER_EMAIL };
+    }
+
     const supabase = getSupabaseServerClient();
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) return null;
