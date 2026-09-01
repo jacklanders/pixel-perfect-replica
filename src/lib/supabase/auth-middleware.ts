@@ -50,7 +50,10 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
     const { data, error } = await supabase.auth.getUser();
 
     if (error || !data.user) {
-      throw new Response("Unauthorized", { status: 401 });
+      // FIX: Usar error con statusCode para que errorMiddleware lo deje pasar
+      const authError = new Error("Unauthorized") as Error & { statusCode: number };
+      authError.statusCode = 401;
+      throw authError;
     }
 
     return next({

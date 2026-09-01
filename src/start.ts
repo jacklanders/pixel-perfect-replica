@@ -6,7 +6,12 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
     return await next();
   } catch (error) {
+    // Dejar pasar errores con statusCode (h3/HTTPError)
     if (error != null && typeof error === "object" && "statusCode" in error) {
+      throw error;
+    }
+    // FIX: Dejar pasar Response nativos (ej: 401 de auth)
+    if (error instanceof Response) {
       throw error;
     }
     console.error(error);

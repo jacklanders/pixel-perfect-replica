@@ -3,52 +3,7 @@
 
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
-
-// DEBUG: Vamos a probar TODAS las formas de leer variables de entorno
-// y ver cuál funciona en tu máquina
-function getEnvVar(name: string): string | undefined {
-  // Forma 1: process.env (Node.js)
-  if (typeof process !== "undefined" && process.env && name in process.env) {
-    const val = process.env[name];
-    if (val) return val;
-  }
-
-  // Forma 2: import.meta.env (Vite)
-  try {
-    const viteEnv = (import.meta as unknown as { env?: Record<string, string> }).env;
-    if (viteEnv && name in viteEnv) {
-      const val = viteEnv[name];
-      if (val) return val;
-    }
-  } catch {
-    // import.meta.env no disponible
-  }
-
-  return undefined;
-}
-
-// DEBUG: Log para ver qué estamos leyendo (sin mostrar la key completa por seguridad)
-const supabaseUrl = getEnvVar("VITE_SUPABASE_URL")?.trim();
-const supabaseAnonKey = getEnvVar("VITE_SUPABASE_ANON_KEY")?.trim();
-
-const isDev =
-  typeof process !== "undefined" && process.env && process.env["NODE_ENV"] !== "production";
-if (isDev) {
-  if (supabaseUrl) {
-    console.log("[DEBUG] Supabase URL leída:", supabaseUrl);
-  } else {
-    console.error("[DEBUG] ERROR: No se pudo leer VITE_SUPABASE_URL");
-  }
-
-  if (supabaseAnonKey) {
-    console.log(
-      "[DEBUG] Supabase Key leída (primeros 20 chars):",
-      supabaseAnonKey.substring(0, 20) + "...",
-    );
-  } else {
-    console.error("[DEBUG] ERROR: No se pudo leer VITE_SUPABASE_ANON_KEY");
-  }
-}
+import { getEnvVar } from "@/lib/server/env";
 
 function parseCookieHeader(header: string | null): { name: string; value: string }[] {
   if (!header) return [];
@@ -66,6 +21,14 @@ function parseCookieHeader(header: string | null): { name: string; value: string
 
 export function getSupabaseServerClient() {
   const request = getRequest();
+
+  // FIX: Defensa contra request undefined (puede pasar en workers)
+  if (!request) {
+    throw new Error("No hay request disponible en el contexto del servidor");
+  }
+
+  const supabaseUrl = getEnvVar("VITE_SUPABASE_URL")?.trim();
+  const supabaseAnonKey = getEnvVar("VITE_SUPABASE_ANON_KEY")?.trim();
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
