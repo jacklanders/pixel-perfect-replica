@@ -12,6 +12,63 @@ No implementar nada de esto durante Fases 1 y 2 / Hitos 0–5, salvo decisión e
 - **Fase 8** — Chat de ideación de producto dentro del panel admin.
 - **Fase 9** — Monetización (Ads, pagos, paywall).
 
+## Bugs pendientes verificados (auditoría 06/09/2026 — retomar en próxima sesión)
+
+Auditoría sobre `HEAD` (b72ca21). El repo ya está sincronizado con GitHub; estos bugs viven en el
+código actual. Priorizados por severidad. Verificación de referencia: `bun run typecheck`, `bun run lint`,
+`bun run test`.
+
+### Alta
+- [ ] **Cuota reembolsada por error de la 2ª operación** — `src/lib/server/enviar-postulacion-email.ts:124-133`.
+      Si el mail YA salió por Gmail pero el `UPDATE` que marca `status=sent` falla, el `catch` llama
+      `decrement_daily_usage` → se devuelve la cuota por un envío que sí consumió. Resultado: usuario
+      reenvía → mail duplicado + doble cuota. Fix: revertir la reserva solo si FALLÓ el envío Gmail
+      (`enviarPostulacionGmail`), no si falla la persistencia posterior.
+- [ ] **Sin guarda de idempotencia en el server** — `src/lib/server/enviar-postulacion-email.ts:38-46`.
+      El botón se deshabilita en UI cuando `status === "sent"`, pero un cliente puede llamar
+      `enviarEmailGmail` directo sobre una postulación ya enviada → mail duplicado + cuota extra.
+      Fix: al leer la `application`, si `status === "sent"` → throw ("Esa postulación ya fue enviada").
+
+### Media
+- [ ] **`MOCK_GMAIL` sin guarda de producción** — `src/lib/server/gmail-send.ts:146`,
+      `src/lib/server/gmail-oauth.ts:96,372`. `getEnv("MOCK_GMAIL") === "true"` retorna éxito sin enviar
+      mail. A diferencia de `MOCK_AUTH` (reforzado con `isProduction()` en `src/lib/server/env.ts`),
+      `MOCK_GMAIL` no tiene esa guarda: un deploy de prod con la var seteada por error marcaría
+      postulaciones como enviadas que nunca salieron, silenciosamente. Fix: aplicar `isProduction()` igual
+      que `MOCK_AUTH`.
+- [ ] **Retry puede duplicar el envío** — `src/lib/server/gmail-send.ts` reintenta en 429/5xx
+      (`sendWithTransientRetry`); si el primer request sí llegó a Gmail y solo se perdió la respuesta, el
+      reintento manda un segundo email. Combinado con la idempotencia faltante, el riesgo de duplicados es
+      concreto. Fix: dedup (ej. mismo `Message-ID`) o verificar estado antes de reintentar.
+- [ ] **Prompt injection + sin límite de tamaño** — `src/lib/ai/ai-postulacion.functions.ts:30`,
+      `src/lib/job-post.functions.ts:7`. `raw_text` (contenido del aviso, input del usuario) se interpola
+      crudo en el prompt; `image_base64` no tiene `max()`. Daño acotado por el schema Zod, pero es un
+      vector real. Fix: delimitadores en el prompt + instrucción de ignorar texto ajeno al job posting;
+      `max()` en los schemas.
+- [ ] **PDF roto con caracteres no-WinAnsi** — `src/lib/cv-pdf-core.ts` (fonts StandardFonts/Halvetica →
+      codificación WinAnsi). `drawText` lanza excepción con emojis, cirílico o símbolos no mapeables
+      (comunes en CVs). Rompe `descargarPdf` (`src/lib/cv.export.ts:19`) y el adjunto por Gmail
+      (`src/lib/server/gmail-send.ts:214`). Fix: sanitizar/reemplazar caracteres no soportados antes de
+      dibujar, o fuente con subsetting.
+
+### Baja (opcionales)
+- [ ] `redirect` de `/login` ignorado — `src/routes/login.tsx` y `src/routes/auth.callback.tsx` siempre
+      mandan a `/perfil`; el usuario deep-linkeado pierde su ruta tras autenticarse.
+- [ ] Archivos temporales de adjunto (`resumes/{user}/tmp/`) no se limpian si el envío falla en storage —
+      `src/lib/server/gmail-send.ts:321-327`. Falta limpieza por TTL.
+- [ ] Stale cache del CV "primario" al guardar — `src/routes/_authenticated/cv.tsx:156-165`; no invalida la
+      query key `["cv","primario"]`.
+- [ ] Dead code: `enviarPostulacion` legacy exportado — `src/lib/application.functions.ts:124-167`; doble
+      camino de envío (reserva cuota sin mandar mail). Cubrir el área antes de borrar.
+- [ ] Foto en base64 guardada íntegra en `structured_json` — `src/lib/cv.model.ts:48`, `cv.tsx:458-469`;
+      infla cada listado/save de CVs.
+- [ ] Rate-limit en memoria por worker con IP derivada de `x-forwarded-for` spooleable —
+      `src/lib/server/rate-limit.ts:57-63`.
+- [ ] Sesión expirada con mensaje genérico "Unauthorized" — `src/lib/supabase/auth-middleware.ts:37`; no
+      distingue refresh fallido de no-autenticado.
+- [ ] Error boundary solo en la raíz — una excepción en rutas `_authenticated` cae al fallback global
+      genérico (inglés). `src/routes/__root.tsx`.
+
 ## Pendientes técnicos no bloqueantes (fix del 18/08 — consolidación de auth)
 
 - [ ] Decidir si usar Supabase local (Docker) o Cloud de forma definitiva, y documentarlo en
