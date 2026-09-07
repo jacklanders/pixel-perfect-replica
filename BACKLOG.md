@@ -169,3 +169,38 @@ ejecutar las specs: el collection se rompe durante la carga de `e2e/login.e2e.ts
       build anterior a los fixes `48938de`/`6afdbae`) o de una pestaña cacheada.
       → Cerrado 07/09: redeploy a producción (versión `2c0fe84c-…`), bundle verificado con el fix y
       flujo Gmail real OK en navegador; el error `connected_at` no reapareció.
+
+## Pendientes activos — lista numerada (última actualización 07/09/2026)
+
+Acceso rápido a los pendientes abiertos del fuerde alcance, mejoras y CI. Cada ítem tiene su detalle
+completo en las secciones de arriba; esta lista los resume y prioriza.
+
+1. **Supabase local vs Cloud** — decidir de forma definitiva y documentarlo en `CLAUDE.md`
+   (sección "Pendientes técnicos no bloqueantes (fix del 18/08…)").
+2. **Redirect URLs de login** — si es Supabase Cloud, confirmar en Auth → URL Configuration y en
+   Google Cloud Console los `auth/callback` permitidos (misma sección que el punto 1).
+3. **Seed del admin** — sembrar el primer usuario admin con insert directo en `user_roles` vía
+   `service_role`, nunca desde un endpoint al cliente (Hito 0).
+4. **Landing: rebranding "PostulaYa! JACK" + logos de herramientas** — `src/routes/index.tsx:113`
+   muestra "Jack · prototipo de interfaz"; cambiar y sumar logos de IAs/editores (requerimiento
+   del usuario 06/09). **Siguiente a trabajar.**
+5. **`login.tsx` ignora el `redirect`** que manda `_authenticated/route.tsx` — siempre cae a
+   `/perfil` tras el login (mejora de UX, no bug).
+6. **Edición de avatar ("Cambiar foto")** no implementada — Hito 1 solo muestra el avatar de Google.
+7. **`firma_mail` textarea libre** — decidir si se autogenera desde los otros campos o queda 100%
+   editable a mano (Hito 1).
+8. **Unificar el alta de perfil** — trigger (`0002`) + insert de fallback en `getMiPerfil` son
+   redundantes (fix del 18/08).
+9. **`profiles.avatar_url` / `profiles.skills`** — decidir si se usan o se eliminan (hoy todo va a
+   `preferencias` jsonb).
+10. **`bun run test:e2e` de login sin mockear Supabase Auth** — agrega un mock de auth para no
+    depender de Google real en CI (Hito 1).
+11. **`e2e/auth.setup.ts` es dead code** — borrar o cablear el setup de auth en `projects` (CI,
+    cleanup opcional).
+12. **Assets de ícono PWA reales** (192x192 y 512x512, maskable) — hoy apunta a favicon como
+    placeholder (Hito 0).
+13. **Smoke test real: login con Google local (Docker) end-to-end**, incluyendo refresh de página
+    logueado (ya estaba listado en "Pendientes Hito 1"; se consolida acá).
+
+Además, post-MVP (sin checkbox): guardar más de una versión de CV y que Jack sugiera cuál usar
+según el tipo de vacante ("Mejoras evaluadas para después del MVP").
