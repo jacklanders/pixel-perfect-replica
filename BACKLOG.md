@@ -19,15 +19,13 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
 `bun run test`.
 
 ### Alta
-- [ ] **Cuota reembolsada por error de la 2ª operación** — `src/lib/server/enviar-postulacion-email.ts:124-133`.
-      Si el mail YA salió por Gmail pero el `UPDATE` que marca `status=sent` falla, el `catch` llama
-      `decrement_daily_usage` → se devuelve la cuota por un envío que sí consumió. Resultado: usuario
-      reenvía → mail duplicado + doble cuota. Fix: revertir la reserva solo si FALLÓ el envío Gmail
-      (`enviarPostulacionGmail`), no si falla la persistencia posterior.
-- [ ] **Sin guarda de idempotencia en el server** — `src/lib/server/enviar-postulacion-email.ts:38-46`.
-      El botón se deshabilita en UI cuando `status === "sent"`, pero un cliente puede llamar
-      `enviarEmailGmail` directo sobre una postulación ya enviada → mail duplicado + cuota extra.
-      Fix: al leer la `application`, si `status === "sent"` → throw ("Esa postulación ya fue enviada").
+- [x] **Cuota reembolsada por error de la 2ª operación** — `src/lib/server/enviar-postulacion-email.ts`.
+      El `decrement_daily_usage` ahora solo corre si falla `enviarPostulacionGmail`; si falla la
+      persistencia posterior (`UPDATE` de `status=sent`) el mail ya salió y la cuota NO se revierte.
+      Fix 06/09 (commit pendiente) + test.
+- [x] **Sin guarda de idempotencia en el server** — `src/lib/server/enviar-postulacion-email.ts`.
+      Al leer la `application`, si `status === "sent"` → throw ("Esa postulación ya fue enviada").
+      Fix 06/09 (commit pendiente) + test.
 
 ### Media
 - [ ] **`MOCK_GMAIL` sin guarda de producción** — `src/lib/server/gmail-send.ts:146`,

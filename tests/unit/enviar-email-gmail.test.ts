@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { FakeSupabase, rowResult, fakeResponse } from "./supabase-fake";
+import { FakeSupabase, rowResult, fakeResponse, errResult } from "./supabase-fake";
 import * as oauth from "@/lib/server/gmail-oauth";
 import { enviarEmailGmailCore } from "@/lib/server/enviar-postulacion-email";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -196,5 +196,45 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     const updateOp = client.calls.find((c) => c.op === "update" && c.table === "applications");
     expect(updateOp).toBeUndefined();
     expect(fetchStub).not.toHaveBeenCalled();
+  });
+
+  it("bloquea el reenvío de una postulación ya enviada (status sent) sin gastar cuota ni llamar a Gmail", async () => {
+    client.handlers["applications"] = () =>
+      rowResult({ ...BASE_APP, status: "sent", sent_at: isoIn(-100) });
+
+    await expect(enviarEmailGmailCore(coreArgs(client))).rejects.toThrow(
+      "Esa postulación ya fue enviada",
+    );
+
+    // No hubo update, no se reservó ni revirtió cuota, y Gmail no fue llamado.
+    const updateOp = client.calls.find((c) => c.op === "update" && c.table === "applications");
+    expect(updateOp).toBeUndefined();
+    expect(rpcNames).not.toContain("increment_daily_usage");
+    expect(rpcNames).not.toContain("decrement_daily_usage");
+    expect(fetchStub).not.toHaveBeenCalled();
+  });
+
+  it("si el UPDATE que marca 'sent' falla, NO revierte la cuota (el mail ya salió)", async () => {
+    const accessEnc = await oauth.encrypt("access-valid");
+    client.handlers["oauth_connections"] = () =>
+      rowResult({
+        encrypted_access_token: accessEnc,
+        encrypted_refresh_token: null,
+        expires_at: isoIn(60 * 60),
+      });
+    client.handlers["applications"] = (op) => {
+      if (op.op === "update") return errResult("el update explotó");
+      return rowResult(BASE_APP);
+    };
+    fetchStub.mockResolvedValue(fakeResponse(200, { id: "gmail-ok" }));
+
+    await expect(enviarEmailGmailCore(coreArgs(client))).rejects.toThrow("el update explotó");
+
+    // El mail salió por Gmail (1 llamada), pero la reserva NO se revierte:
+    // devolver la cuota permitiría reenviar → duplicado + doble cuota.
+    const gmail = fetchStub.mock.calls.filter((c) => String(c[0]).includes("gmail.googleapis.com"));
+    expect(gmail).toHaveLength(1);
+    expect(rpcNames).toContain("increment_daily_usage");
+    expect(rpcNames).not.toContain("decrement_daily_usage");
   });
 });

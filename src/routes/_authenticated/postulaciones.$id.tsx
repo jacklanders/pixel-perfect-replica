@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -249,6 +249,12 @@ function CampoCopiable({
 
 /* ─── Ruta ─── */
 export const Route = createFileRoute("/_authenticated/postulaciones/$id")({
+  validateSearch: (search: Record<string, unknown>): { gmail?: string; error?: string } => {
+    const result: { gmail?: string; error?: string } = {};
+    if (typeof search["gmail"] === "string") result.gmail = search["gmail"];
+    if (typeof search["error"] === "string") result.error = search["error"];
+    return result;
+  },
   head: () => ({
     meta: [
       { title: "Mail de postulación — Jack" },
@@ -281,6 +287,7 @@ function DetallePostulacion() {
   const { id } = Route.useParams();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const search = useSearch({ from: "/_authenticated/postulaciones/$id" });
 
   const fetchUso = useServerFn(getUsoDiario);
   const fetchCvs = useServerFn(listarCvs);
@@ -361,6 +368,24 @@ function DetallePostulacion() {
       setFirma(f);
     }
   }, [perfil]);
+
+  /* ─── Feedback del callback de Gmail OAuth ─── */
+  // Vuelve acá con ?gmail=conectado o ?error=gmail_procesamiento tras el
+  // redirect de Google. Se muestra una sola vez por montaje y se limpia el URL.
+  const toastGmail = useRef(false);
+  useEffect(() => {
+    if (toastGmail.current) return;
+    const gmailParam = search["gmail"];
+    const errorParam = search["error"];
+    if (!gmailParam && !errorParam) return;
+    toastGmail.current = true;
+    if (gmailParam === "conectado") {
+      toast.success("¡Gmail conectado! Ya podés enviar desde esta postulación.");
+    } else {
+      toast.error("No se pudo conectar Gmail. Reintentá en un momento.");
+    }
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [search]);
 
   /* ─── Mutations ─── */
   const guardar = useMutation({
@@ -537,8 +562,14 @@ function DetallePostulacion() {
   /* ─── Conectar Gmail ─── */
   const conectarGmail = async () => {
     try {
-      const { url, state } = await fetchGmailAuthUrl();
+      // La ruta actual se manda al server para viajar dentro del `state` de
+      // OAuth (y de paso como fallback en sessionStorage): así el callback
+      // vuelve a ESTA postulación — con el botón "Enviar desde Gmail" ya
+      // activo — en vez de aterrizar en /perfil.
+      const currentOrigin = `${window.location.pathname}${window.location.search}`;
+      const { url, state } = await fetchGmailAuthUrl({ data: { origin: currentOrigin } });
       sessionStorage.setItem("gmail_oauth_state", state);
+      sessionStorage.setItem("gmail_oauth_origin", currentOrigin);
       window.location.href = url;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al iniciar conexión con Gmail");
