@@ -43,16 +43,16 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
       `gmail-send.ts`, y la cuota diaria NO se revierte en ese caso (revertirla habilitaría un reintento
       que duplica el correo). El retry queda solo para rechazos HTTP definitivos (429/5xx/401+refresh),
       donde Gmail respondió NO. Límite por intento bajado a 1 retry. Fix 06/09 + 5 tests.
-- [ ] **Prompt injection + sin límite de tamaño** — `src/lib/ai/ai-postulacion.functions.ts:30`,
-      `src/lib/job-post.functions.ts:7`. `raw_text` (contenido del aviso, input del usuario) se interpola
-      crudo en el prompt; `image_base64` no tiene `max()`. Daño acotado por el schema Zod, pero es un
-      vector real. Fix: delimitadores en el prompt + instrucción de ignorar texto ajeno al job posting;
-      `max()` en los schemas.
-- [ ] **PDF roto con caracteres no-WinAnsi** — `src/lib/cv-pdf-core.ts` (fonts StandardFonts/Halvetica →
-      codificación WinAnsi). `drawText` lanza excepción con emojis, cirílico o símbolos no mapeables
-      (comunes en CVs). Rompe `descargarPdf` (`src/lib/cv.export.ts:19`) y el adjunto por Gmail
-      (`src/lib/server/gmail-send.ts:214`). Fix: sanitizar/reemplazar caracteres no soportados antes de
-      dibujar, o fuente con subsetting.
+- [x] **Prompt injection + sin límite de tamaño** — `raw_text` con `max(20000)` y `image_base64` con
+      `max(4.000.000)` (mensajes de error en español) en `ai-postulacion.functions.ts` +
+      `job-post.functions.ts`; el prompt de extracción ahora enmarca el aviso con
+      `--- INICIO/FIN DEL AVISO ---` e instruye a la IA a tratar TODO lo que esté dentro como contenido
+      del aviso (ignorar instrucciones/prompts embebidos). Fix 06/09.
+- [x] **PDF roto con caracteres no-WinAnsi** — nuevo `sanitizarTextoPdf` en `src/lib/cv-pdf-core.ts`:
+      antes de dibujar, los caracteres que las fuentes estándar no pueden codificar (emojis, cirílico,
+      CJK) se reemplazan por `?`; se conservan acentos Latin-1 y la extensión WinAnsi (comillas
+      tipográficas, guiones, …). Aplica en `drawText` y `drawWrapped` → `descargarPdf` y adjunto por
+      Gmail ya no explotan con estos caracteres. Fix 06/09 + 5 tests.
 
 ### Baja (opcionales)
 - [x] `redirect` de `/login` ignorado — `login.tsx` y `auth.callback.tsx` ahora leen `?redirect`,

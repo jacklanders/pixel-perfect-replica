@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
 
 const crearJobPostSchema = z.object({
   source_type: z.enum(["text", "image", "url"]),
-  raw_text: z.string().min(1),
+  raw_text: z.string().min(1).max(20000),
   extracted_json: z.record(z.unknown()).nullable().optional(),
   employer: z.string().nullable().optional(),
   role: z.string().nullable().optional(),

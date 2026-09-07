@@ -72,6 +72,65 @@ export interface DatosPdf {
   fotoBase64?: string | null | undefined;
 }
 
+// ─── Sanitización WinAnsi ───
+// Las fuentes estándar (Helvetica/Helvetica-Bold) usan encoding WinAnsi: un
+// carácter ajeno a ese set (emojis, cirílico, CJK…) hace que pdf-lib lance
+// "WinAnsi cannot encode character". Se reemplazan por un equivalente ASCII o
+// '?' antes de dibujar, para que el PDF nunca se rompa por el contenido del CV.
+function rangoWinAnsi(desde: number, hasta: number): number[] {
+  const out: number[] = [];
+  for (let i = desde; i <= hasta; i++) out.push(i);
+  return out;
+}
+
+const CODES_WIN_ANSI: ReadonlySet<number> = new Set<number>([
+  ...rangoWinAnsi(0x20, 0x7e),
+  ...rangoWinAnsi(0xa0, 0xff),
+  // Extensión high-Unicode que también soporta la fuente estándar.
+  0x152,
+  0x153,
+  0x160,
+  0x161,
+  0x178,
+  0x17d,
+  0x17e,
+  0x192,
+  0x2c6,
+  0x2dc,
+  0x2013,
+  0x2014,
+  0x2018,
+  0x2019,
+  0x201a,
+  0x201c,
+  0x201d,
+  0x201e,
+  0x2020,
+  0x2021,
+  0x2022,
+  0x2026,
+  0x2030,
+  0x2039,
+  0x203a,
+  0x20ac,
+  0x2122,
+]);
+
+/** Reemplaza los caracteres que la fuente estándar no puede codificar. */
+export function sanitizarTextoPdf(texto: string): string {
+  if (!texto) return texto;
+  let resultado = "";
+  for (const char of texto) {
+    const code = char.codePointAt(0)!;
+    if (CODES_WIN_ANSI.has(code)) {
+      resultado += char;
+      continue;
+    }
+    resultado += "?";
+  }
+  return resultado;
+}
+
 function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString("es-AR");
@@ -178,6 +237,7 @@ function drawText(
     align?: "left" | "center" | "right";
   },
 ) {
+  text = sanitizarTextoPdf(text);
   const f = opts?.bold ? fonts.fontBold : fonts.font;
   let x = opts?.x ?? MARGEN;
   ensureSpace(ctx, size * 1.4);
@@ -222,6 +282,7 @@ function drawWrapped(
     bold?: boolean;
   },
 ) {
+  text = sanitizarTextoPdf(text);
   const x = opts?.x ?? MARGEN;
   const maxChars = opts?.maxChars ?? 85;
   const f = opts?.bold ? fonts.fontBold : fonts.font;
