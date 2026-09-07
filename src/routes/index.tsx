@@ -2,18 +2,19 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, FileUp, MessagesSquare, Download, ShieldCheck } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
+import { ToolBadges, IA_TOOLS, EDITOR_TOOLS } from "@/components/ToolLogos";
 import heroImg from "@/assets/jack-hero.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Jack — Creá y mejorá tu CV con IA" },
+      { title: "PostulaYa! JACK — Creá y mejorá tu CV con IA" },
       {
         name: "description",
         content:
           "Subí tu CV o creálo desde cero. Jack lo mejora con IA, lo ordena para filtros ATS y lo exportás en PDF.",
       },
-      { property: "og:title", content: "Jack — Creá y mejorá tu CV con IA" },
+      { property: "og:title", content: "PostulaYa! JACK — Creá y mejorá tu CV con IA" },
       {
         property: "og:description",
         content: "Tu asistente para armar un CV que pase los filtros y consiga entrevistas.",
@@ -51,7 +52,7 @@ function Landing() {
         <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 md:grid-cols-[1.05fr_1fr] md:py-28">
           <div>
             <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-ink-foreground/25 px-3 py-1 text-xs tracking-wide uppercase">
-              Prototipo · Fase 1
+              PostulaYa! JACK · Prototipo Fase 1
             </p>
             <h1 className="font-display text-4xl leading-[1.05] font-bold md:text-6xl">
               Tu CV, trabajado
@@ -59,8 +60,8 @@ function Landing() {
               con criterio.
             </h1>
             <p className="mt-5 max-w-md text-base/relaxed opacity-85">
-              Jack es tu asistente de búsqueda laboral: mejora lo que ya escribiste, completa lo que
-              falta y deja tu CV listo para postular.
+              PostulaYa! JACK es tu asistente de búsqueda laboral: mejora lo que ya escribiste,
+              completa lo que falta y deja tu CV listo para postular.
             </p>
             <div className="mt-8">
               <Button asChild size="lg" variant="secondary">
@@ -100,7 +101,19 @@ function Landing() {
         </div>
       </section>
 
-      <section className="border-y border-border bg-secondary/60">
+      <section className="bg-secondary/50">
+        <div className="mx-auto max-w-6xl px-5 py-10 text-sm">
+          <p className="mb-4 font-medium text-secondary-foreground">
+            Hecha con las herramientas favoritas de los devs
+          </p>
+          <div className="flex flex-col gap-3">
+            <ToolBadges tools={IA_TOOLS} />
+            <ToolBadges tools={EDITOR_TOOLS} />
+          </div>
+        </div>
+      </section>
+
+      <section className="border-t border-border bg-secondary/60">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-5 py-10 text-sm">
           <ShieldCheck className="size-5 text-primary" />
           <p className="text-secondary-foreground">
@@ -110,7 +123,7 @@ function Landing() {
       </section>
 
       <footer className="mx-auto max-w-6xl px-5 py-10 text-sm text-muted-foreground">
-        Jack · prototipo de interfaz
+        PostulaYa! JACK · prototipo de interfaz
       </footer>
     </div>
   );
