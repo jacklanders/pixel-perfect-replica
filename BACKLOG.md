@@ -19,13 +19,16 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
 `bun run test`.
 
 ### Alta
-- [ ] **Callback de Gmail no vuelve a la postulación ni habilita "Enviar desde Gmail"** —
+- [x] **Callback de Gmail no vuelve a la postulación ni habilita "Enviar desde Gmail"** —
       flujo OAuth (`auth.gmail-callback.tsx` + `procesarGmailCallback`): tras conectar Gmail debe
       redirigir a la postulación de origen y el botón debe quedar "conectado". Todos los tests manuales
       fallaron hasta ahora (aterrizaba en `/perfil`; el guardado de tokens fallaba contra el schema real).
       Fixes aplicados 06/09 (commits 48938de + 6afdbae): service role para las escrituras, oauth conectado
       = fila en `oauth_connections` (schema real de Lovable Cloud), origen embebido en el state + tarjeta
-      de diagnóstico en el callback. **Pendiente: verificar en navegador y retomar.**
+      de diagnóstico en el callback.
+      **Verificado 07/09 en producción** (deploy `nitro deploy --prebuilt` → versión
+      `2c0fe84c-7df9-4a95-855a-36d442487098`): login con Google OK, el callback vuelve a la postulación
+      de origen, el botón "Enviar desde Gmail" queda activo y el mail se entrega (prueba real del usuario).
 - [x] **Cuota reembolsada por error de la 2ª operación** — `src/lib/server/enviar-postulacion-email.ts`.
       El `decrement_daily_usage` ahora solo corre si falla `enviarPostulacionGmail`; si falla la
       persistencia posterior (`UPDATE` de `status=sent`) el mail ya salió y la cuota NO se revierte.
@@ -159,12 +162,10 @@ ejecutar las specs: el collection se rompe durante la carga de `e2e/login.e2e.ts
 - [ ] **Cleanup menor (opcional): `e2e/auth.setup.ts` es dead code** — testMatch es `*.e2e.ts` y
       `auth.setup.ts` no calza, así que nunca corre; el `storageState` (e2e/.auth/user.json) que
       referencia no está cableado en `projects`. Borrar o cablear bien el setup de auth.
-- [ ] **Callback Gmail: error `connected_at` aún visible en browser (dato 06/09).** El código actual
+- [x] **Callback Gmail: error `connected_at` aún visible en browser (dato 06/09).** El código actual
       NO referencia `connected_at` (grep verificado; solo comentarios en `gmail-oauth.ts:241` y
       `types.ts:194`). La consola mostraba nombres de bundle hasheados (`auth.gmail-callback-*.js`,
-      `index-*.js`), típicos de un build de producción: el error sale del app desplegado (Lovable,
-      build anterior a los fixes `48938de`/`6afdbae`) o de una pestaña cacheada. Volver a verificar
-      en `localhost:8080` (el server local de 06/09 21:31 corre código actual) con hard refresh y/o
-      redeploy en Lovable antes de dar por cerrado el flujo. Warnings de consola ajenos al bug:
-      "Permissions policy violation: unload", "field has no id/name", "no autocomplete", "No label
-      associated" (a11y leve).
+      `index-*.js`), típicos de un build de producción: el error salía del app desplegado (Lovable,
+      build anterior a los fixes `48938de`/`6afdbae`) o de una pestaña cacheada.
+      → Cerrado 07/09: redeploy a producción (versión `2c0fe84c-…`), bundle verificado con el fix y
+      flujo Gmail real OK en navegador; el error `connected_at` no reapareció.
