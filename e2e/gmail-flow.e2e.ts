@@ -36,7 +36,9 @@ test.describe("Flujo Gmail (mock)", () => {
   );
   test.describe.configure({ mode: "serial" });
 
-  test("Conectar Gmail: callback simulado vuelve a la postulación y activa enviar", async ({ page }) => {
+  test("Conectar Gmail: callback simulado vuelve a la postulación y activa enviar", async ({
+    page,
+  }) => {
     // Crear una postulación real por la UI y usar SU ruta como origen: el
     // callback debe volver a ella (con el botón "Enviar desde Gmail" activo),
     // no a /perfil.

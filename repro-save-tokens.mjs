@@ -5,9 +5,8 @@ for (const line of readFileSync("./.env.local", "utf-8").split("\n")) {
   if (m) process.env[m[1]] = m[2];
 }
 
-const { saveGmailTokens, getValidAccessToken, isGmailConnected, markGmailDisconnected } = await import(
-  "./src/lib/server/gmail-oauth.ts"
-);
+const { saveGmailTokens, getValidAccessToken, isGmailConnected, markGmailDisconnected } =
+  await import("./src/lib/server/gmail-oauth.ts");
 const { getServiceClient } = await import("./src/lib/server/supabase-service.ts");
 
 const service = getServiceClient();
