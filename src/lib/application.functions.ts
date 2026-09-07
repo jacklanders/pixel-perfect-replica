@@ -120,52 +120,6 @@ export const actualizarApplication = createServerFn({ method: "POST" })
     return row;
   });
 
-// ─── Enviar postulación con límite diario ───
-export const enviarPostulacion = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .validator(
-    z.object({
-      applicationId: z.string(),
-      generated_body: z.string().optional(),
-      destination_email: z.string().email().optional(),
-    }),
-  )
-  .handler(async ({ data, context }) => {
-    // 1. Verificar límite diario (transaccional en Postgres)
-    const { data: limitResult, error: limitError } = await context.supabase.rpc(
-      "increment_daily_usage",
-      { p_limit: 2 },
-    );
-
-    if (limitError) throw new Error(limitError.message);
-
-    const allowed = (limitResult as { allowed: boolean }[])[0]?.allowed ?? false;
-    if (!allowed) {
-      throw new Error("Límite diario alcanzado. Podés generar hasta 2 postulaciones por día.");
-    }
-
-    // 2. Actualizar body/email si el usuario los editó
-    const update: Record<string, unknown> = {
-      status: "sent",
-      sent_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    if (data.generated_body !== undefined) update["generated_body"] = data.generated_body;
-    if (data.destination_email !== undefined) update["destination_email"] = data.destination_email;
-
-    // 3. Marcar como enviada
-    const { data: row, error } = await context.supabase
-      .from("applications")
-      .update(update)
-      .eq("id", data.applicationId)
-      .eq("user_id", context.userId)
-      .select()
-      .single();
-
-    if (error) throw new Error(error.message);
-    return row;
-  });
-
 // ─── Consultar uso diario real (para AppShell e indicadores) ───
 export const getUsoDiario = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

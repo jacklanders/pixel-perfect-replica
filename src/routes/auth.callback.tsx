@@ -4,6 +4,12 @@ import { supabase } from "@/lib/supabase/client";
 import { FUNNEL, trackEvent } from "@/lib/observability";
 
 export const Route = createFileRoute("/auth/callback")({
+  // Pasa por /login (?redirect=<url>) y por el redirectTo de Google.
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
+    const result: { redirect?: string } = {};
+    if (typeof search["redirect"] === "string") result.redirect = search["redirect"];
+    return result;
+  },
   component: AuthCallback,
 });
 
@@ -11,6 +17,11 @@ function AuthCallback() {
   const navigate = useNavigate();
   const [status, setStatus] = useState("Procesando login…");
   const handled = useRef(false);
+  const { redirect } = Route.useSearch();
+
+  // Solo rutas internas: un ?redirect=https://evil.com no debe redirigir fuera.
+  const backTo =
+    redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "/perfil";
 
   useEffect(() => {
     if (handled.current) return;
@@ -23,12 +34,12 @@ function AuthCallback() {
 
       if (errorParam) {
         console.error("[auth] OAuth error:", errorParam);
-        navigate({ to: "/login", search: { error: "auth_fallo" } });
+        navigate({ to: "/login", search: { error: "auth_fallo", redirect: backTo } });
         return;
       }
 
       if (!code) {
-        navigate({ to: "/login", search: { error: "sin_code" } });
+        navigate({ to: "/login", search: { error: "sin_code", redirect: backTo } });
         return;
       }
 
@@ -39,7 +50,7 @@ function AuthCallback() {
 
       if (existingSession) {
         trackEvent(FUNNEL.loginOk);
-        navigate({ to: "/perfil" });
+        navigate({ to: backTo });
         return;
       }
 
@@ -49,7 +60,7 @@ function AuthCallback() {
       if (!exchangeError) {
         trackEvent(FUNNEL.loginOk);
         setStatus("¡Listo! Redirigiendo…");
-        setTimeout(() => navigate({ to: "/perfil" }), 300);
+        setTimeout(() => navigate({ to: backTo }), 300);
         return;
       }
 
@@ -60,18 +71,21 @@ function AuthCallback() {
 
       if (sessionAfter) {
         trackEvent(FUNNEL.loginOk);
-        navigate({ to: "/perfil" });
+        navigate({ to: backTo });
         return;
       }
 
       // 4. Solo si definitivamente no hay sesión, mostrar error
       console.error("[auth] Exchange failed:", exchangeError.message);
       setStatus("Error al procesar el login. Redirigiendo…");
-      setTimeout(() => navigate({ to: "/login", search: { error: "auth_fallo" } }), 2000);
+      setTimeout(
+        () => navigate({ to: "/login", search: { error: "auth_fallo", redirect: backTo } }),
+        2000,
+      );
     };
 
     void handleAuth();
-  }, [navigate]);
+  }, [navigate, backTo]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">

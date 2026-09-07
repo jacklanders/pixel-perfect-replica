@@ -19,6 +19,13 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
 `bun run test`.
 
 ### Alta
+- [ ] **Callback de Gmail no vuelve a la postulación ni habilita "Enviar desde Gmail"** —
+      flujo OAuth (`auth.gmail-callback.tsx` + `procesarGmailCallback`): tras conectar Gmail debe
+      redirigir a la postulación de origen y el botón debe quedar "conectado". Todos los tests manuales
+      fallaron hasta ahora (aterrizaba en `/perfil`; el guardado de tokens fallaba contra el schema real).
+      Fixes aplicados 06/09 (commits 48938de + 6afdbae): service role para las escrituras, oauth conectado
+      = fila en `oauth_connections` (schema real de Lovable Cloud), origen embebido en el state + tarjeta
+      de diagnóstico en el callback. **Pendiente: verificar en navegador y retomar.**
 - [x] **Cuota reembolsada por error de la 2ª operación** — `src/lib/server/enviar-postulacion-email.ts`.
       El `decrement_daily_usage` ahora solo corre si falla `enviarPostulacionGmail`; si falla la
       persistencia posterior (`UPDATE` de `status=sent`) el mail ya salió y la cuota NO se revierte.
@@ -50,20 +57,23 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
       dibujar, o fuente con subsetting.
 
 ### Baja (opcionales)
-- [ ] `redirect` de `/login` ignorado — `src/routes/login.tsx` y `src/routes/auth.callback.tsx` siempre
-      mandan a `/perfil`; el usuario deep-linkeado pierde su ruta tras autenticarse.
-- [ ] Archivos temporales de adjunto (`resumes/{user}/tmp/`) no se limpian si el envío falla en storage —
-      `src/lib/server/gmail-send.ts:321-327`. Falta limpieza por TTL.
-- [ ] Stale cache del CV "primario" al guardar — `src/routes/_authenticated/cv.tsx:156-165`; no invalida la
-      query key `["cv","primario"]`.
-- [ ] Dead code: `enviarPostulacion` legacy exportado — `src/lib/application.functions.ts:124-167`; doble
-      camino de envío (reserva cuota sin mandar mail). Cubrir el área antes de borrar.
+- [x] `redirect` de `/login` ignorado — `login.tsx` y `auth.callback.tsx` ahora leen `?redirect`,
+      lo validan (solo rutas internas, sin open redirect) y vuelven ahí tras autenticarse. Fix 06/09.
+- [x] Archivos temporales de adjunto (`resumes/{user}/tmp/`) no se limpian si el envío falla en storage —
+      `src/lib/server/gmail-send.ts` borra el temporal en un `finally` (éxito o fallo del envío). Fix 06/09.
+- [x] Stale cache del CV "primario" al guardar — `src/routes/_authenticated/cv.tsx` ahora invalida
+      también `["cv","primario"]` al guardar. Fix 06/09.
+- [x] Dead code: `enviarPostulacion` legacy exportado — `src/lib/application.functions.ts` (bloque del
+      "Enviar" viejo, que gastaba cuota sin mandar mail). Se verificó que ningún UI ni test lo usaba
+      (el mutation `enviar` nunca se disparaba) y se eliminó con sus wrappers en `postulaciones.$id.tsx`.
+      Fix 06/09.
 - [ ] Foto en base64 guardada íntegra en `structured_json` — `src/lib/cv.model.ts:48`, `cv.tsx:458-469`;
       infla cada listado/save de CVs.
-- [ ] Rate-limit en memoria por worker con IP derivada de `x-forwarded-for` spooleable —
-      `src/lib/server/rate-limit.ts:57-63`.
-- [ ] Sesión expirada con mensaje genérico "Unauthorized" — `src/lib/supabase/auth-middleware.ts:37`; no
-      distingue refresh fallido de no-autenticado.
+- [x] Rate-limit en memoria con IP derivada de `x-forwarded-for` spooleable —
+      `src/lib/server/rate-limit.ts` prioriza `CF-Connecting-IP` (Cloudflare Workers) sobre los headers
+      inyectables. Fix 06/09.
+- [x] Sesión expirada con mensaje genérico "Unauthorized" — `src/lib/supabase/auth-middleware.ts` ahora
+      distingue refresh fallido ("Tu sesión expiró…") de no-autenticado. Fix 06/09.
 - [ ] Error boundary solo en la raíz — una excepción en rutas `_authenticated` cae al fallback global
       genérico (inglés). `src/routes/__root.tsx`.
 
@@ -77,10 +87,10 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
       Redirect URLs permitidas. `supabase/config.toml` no aplica a un proyecto Cloud.
       Si en cambio se sigue usando Supabase local, chequear que quedó igual el
       Google Cloud Console con `http://127.0.0.1:54321/auth/v1/callback`.
-- [ ] Confirmar que el schema real en el Supabase que están usando coincide con
-      `supabase/migrations/0001` a `0003` — hay indicios de que Lovable Cloud pudo haber escrito
-      políticas propias directo en la base (nombres de policy tipo "Public profiles are viewable by
-      everyone" en el historial), fuera de las migraciones versionadas.
+- [x] Confirmar que el schema real en el Supabase que están usando coincide con
+      `supabase/migrations/0001` a `0003` — verificado 06/09: NO coincidía (Lovable Cloud nunca creó
+      `oauth_connection_status` y su `oauth_connections` difiere de 0001/0007). Código alineado al schema
+      real + `0011_reconcile_oauth_live_schema.sql` para DBs frescas (commit 6afdbae).
 - [ ] Unificar el alta de perfil: hoy hay trigger (`0002`) + insert de fallback en `getMiPerfil` — no es
       grave pero es redundante.
 - [ ] Decidir si `profiles.avatar_url`/`profiles.skills` (columnas de la migración `0002`) se usan de

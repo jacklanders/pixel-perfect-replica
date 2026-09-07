@@ -5,6 +5,14 @@ import { Button } from "@/components/ui/button";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export const Route = createFileRoute("/login")({
+  // El guard de _authenticated/route.tsx redirige acá con ?redirect=<url>; se
+  // reenvía a /auth/callback para que después del login se vuelva a esa ruta.
+  validateSearch: (search: Record<string, unknown>): { redirect?: string; error?: string } => {
+    const result: { redirect?: string; error?: string } = {};
+    if (typeof search["redirect"] === "string") result.redirect = search["redirect"];
+    if (typeof search["error"] === "string") result.error = search["error"];
+    return result;
+  },
   head: () => ({
     meta: [
       { title: "Ingresar a Jack" },
@@ -25,16 +33,29 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { redirect, error: errorParam } = Route.useSearch();
+
+  const errorMostrado =
+    error ??
+    (errorParam === "auth_fallo"
+      ? "El login no se pudo completar. Probá de nuevo."
+      : errorParam === "sin_code"
+        ? "No se recibió el código de Google. Probá de nuevo."
+        : null);
 
   async function handleGoogleLogin() {
     setError(null);
     setLoading(true);
     const supabase = getSupabaseBrowserClient();
+    // Solo rutas internas: evitar open redirect a dominios externos.
+    const safeRedirect =
+      redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : undefined;
+    const redirectTo = `${window.location.origin}/auth/callback${
+      safeRedirect ? `?redirect=${encodeURIComponent(safeRedirect)}` : ""
+    }`;
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { redirectTo },
     });
     if (authError) {
       setError("No se pudo iniciar el login con Google. Probá de nuevo.");
@@ -78,7 +99,7 @@ function LoginPage() {
             {loading ? "Redirigiendo a Google…" : "Continuar con Google"}
           </Button>
 
-          {error ? <p className="mt-4 text-sm text-destructive">{error}</p> : null}
+          {errorMostrado ? <p className="mt-4 text-sm text-destructive">{errorMostrado}</p> : null}
 
           <p className="mt-6 text-xs text-muted-foreground">
             Solo pedimos tu identidad de Google. El envío de mails desde tu Gmail se habilita

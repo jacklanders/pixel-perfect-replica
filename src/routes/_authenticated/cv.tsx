@@ -159,6 +159,9 @@ function CvEditorPage() {
     onSuccess: (updated) => {
       queryClient.setQueryData(cvQueryKey(updated.id), updated);
       queryClient.invalidateQueries({ queryKey: misCvsQueryKey });
+      // La vista del CV "primario" (/cv sin ?id=) cachea con ["cv","primario"]:
+      // invalidarla para no mostrar datos viejos tras guardar.
+      queryClient.invalidateQueries({ queryKey: cvQueryKey(id ?? "primario") });
       toast.success("CV guardado");
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo guardar el CV"),

@@ -37,8 +37,15 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
     const { data, error } = await supabase.auth.getUser();
 
     if (error || !data.user) {
-      // FIX: Usar error con statusCode para que pase limpio por el middleware
-      const authError = new Error("Unauthorized") as Error & { statusCode: number };
+      // FIX: Usar error con statusCode para que pase limpio por el middleware.
+      // Distingue sesión expirada (refresh fallido) de "nunca autenticado".
+      const msg = (error?.message ?? "").toLowerCase();
+      const sesionExpirada = /(refresh|expirad|expired|jwt)/.test(msg);
+      const authError = new Error(
+        sesionExpirada
+          ? "Tu sesión expiró. Volvé a iniciar sesión."
+          : "Debés iniciar sesión para continuar.",
+      ) as Error & { statusCode: number };
       authError.statusCode = 401;
       throw authError;
     }

@@ -55,10 +55,15 @@ export function checkRateLimit(
 
 /** Devuelve la clave de rate limiting según la IP del request (proxy-aware). */
 export function getClientIp(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for") || "";
-  if (forwarded) return forwarded.split(",")[0]?.trim() ?? "";
+  // Prioridad: la IP real que provee Cloudflare (hosting del worker) sobrescribe
+  // el header del cliente. x-forwarded-for es inyectable por cualquier cliente:
+  // usarlo como primera fuente permitiría saltar el rate limit cambiando el header.
+  const cf = request.headers.get("cf-connecting-ip") || "";
+  if (cf) return cf.trim();
   const real = request.headers.get("x-real-ip") || "";
   if (real) return real.trim();
+  const forwarded = request.headers.get("x-forwarded-for") || "";
+  if (forwarded) return forwarded.split(",")[0]?.trim() ?? "";
   return "unknown";
 }
 

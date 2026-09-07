@@ -316,14 +316,19 @@ export async function enviarPostulacionGmail(
   const rawBase64Url = toBase64Url(utf8ToBase64(mimeMessage));
 
   // 4. Enviar vía Gmail API (con retry por refresh)
-  const result = await sendGmailWithRetry(options.userId, rawBase64Url, supabase);
-
-  // 5. Limpiar adjunto temporal tras envío exitoso
-  if (options.adjunto) {
-    await supabase.storage
-      .from("resumes")
-      .remove([options.adjunto.storagePath])
-      .catch(() => {});
+  let result: Awaited<ReturnType<typeof sendGmailWithRetry>>;
+  try {
+    result = await sendGmailWithRetry(options.userId, rawBase64Url, supabase);
+  } finally {
+    // 5. Limpiar adjunto temporal SIEMPRE (éxito o fallo del envío): un archivo
+    // huérfano en `resumes/{user}/tmp/` por un envío fallido no se borraría
+    // solo (el cleanup definitivo por TTL aún no existe).
+    if (options.adjunto) {
+      await supabase.storage
+        .from("resumes")
+        .remove([options.adjunto.storagePath])
+        .catch(() => {});
+    }
   }
 
   return { messageId: result.id };

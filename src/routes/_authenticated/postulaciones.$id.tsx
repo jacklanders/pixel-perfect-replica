@@ -35,7 +35,6 @@ import {
 } from "lucide-react";
 import {
   getApplicationById,
-  enviarPostulacion,
   actualizarApplication,
   actualizarApplicationStatus,
   getUsoDiario,
@@ -50,11 +49,6 @@ import { verificarEstadoGmail, generarGmailAuthUrl, desconectarGmail } from "@/l
 import { useAuth } from "@/hooks/useAuth";
 
 /* ─── Wrappers tipados ─── */
-type EnviarInput = {
-  applicationId: string;
-  generated_body?: string;
-  destination_email?: string;
-};
 type ActualizarInput = {
   id: string;
   generated_body?: string;
@@ -71,12 +65,6 @@ async function fetchApplication(id: string) {
   return getApplicationById({
     data: { id },
   } as unknown as Parameters<typeof getApplicationById>[0]);
-}
-
-async function enviarApp(payload: EnviarInput) {
-  return enviarPostulacion({
-    data: payload,
-  } as unknown as Parameters<typeof enviarPostulacion>[0]);
 }
 
 async function actualizarApp(payload: ActualizarInput) {
@@ -436,17 +424,6 @@ function DetallePostulacion() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo armar el mail"),
   });
 
-  const enviar = useMutation({
-    mutationFn: () =>
-      enviarApp({
-        applicationId: id,
-        generated_body: cuerpo,
-        destination_email: destino,
-      }),
-    onSuccess: () => toast.success("Postulación enviada"),
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Error al enviar"),
-  });
-
   const enviarGmail = useMutation({
     mutationFn: () =>
       enviarEmailGmail({
@@ -615,8 +592,7 @@ function DetallePostulacion() {
       : app.generated_subject;
 
   const isGmailConnected = gmailStatus?.connected ?? false;
-  const isSending =
-    enviar.isPending || enviarGmail.isPending || guardar.isPending || subirAdjunto.isPending;
+  const isSending = enviarGmail.isPending || guardar.isPending || subirAdjunto.isPending;
 
   /* ─── Adjunto: derivados ─── */
   const cvsJack = cvs?.filter((c) => c.sourceType === "created_from_scratch") ?? [];
