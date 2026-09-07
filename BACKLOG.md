@@ -134,3 +134,31 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
       logos de las IAs (Gemini AI, Claude AI, ChatGPT AI, Kimi AI, OpenCode AI — devs tool) y de los
       editores (VS Code, Antigravity, Cursor, Sublime). Sin brand resources aún: decidir de dónde salen
       los assets (SVG inline / íconos). Requerimiento del usuario 06/09.
+
+## CI — fallas de workflow (GitHub Actions, runner `ubuntu-latest`)
+
+Ultimamente ~15 runs en rojo. El job `e2e` (`bun run test:e2e` → `playwright test`) nunca llega a
+ejecutar las specs: el collection se rompe durante la carga de `e2e/login.e2e.ts`.
+
+- [ ] **`e2e/login.e2e.ts:16` — collection crash: `TypeError: test.skip(...) is not a function`.**
+      `test.skip(isMockAuth, "...")("...", async ...)` no es válido en Playwright: `test.skip(cond,
+      msg)` se invoca DENTRO del cuerpo de un test (devuelve `void`), no como wrapper que retorna un
+      test. Rompe TODO el runner de e2e (`bun run test:e2e` — error exacto en el run). Fix: `test(...,
+      () => { test.skip(isMockAuth, "..."); ... })`.
+- [ ] **`e2e` — mismatch de `MOCK_AUTH` entre webServer y specs.** `playwright.config.ts:23` fuerza
+      `MOCK_AUTH: "true"` en el env del webServer (local y CI), pero `login.e2e.ts:3` deriva
+      `isMockAuth = process.env.MOCK_AUTH === "true"` del env del RUNNER, que en CI no está seteado.
+      Aunque se corra la colección, ese test (redirect `/perfil → /login` sin sesión) se ejecutaría
+      contra un app con `MOCK_AUTH=true` (sesión determinística) y fallaría por timeout. Alinear el
+      criterio de skip a la config del webServer y revisar el resto de specs (`auth.setup.ts` comenta
+      puerto 3000 y `storageState` no está cableado en los projects; `gmail-flow`/`postulaciones`)
+      para dejar el job verde en CI.
+- [ ] **Callback Gmail: error `connected_at` aún visible en browser (dato 06/09).** El código actual
+      NO referencia `connected_at` (grep verificado; solo comentarios en `gmail-oauth.ts:241` y
+      `types.ts:194`). La consola mostraba nombres de bundle hasheados (`auth.gmail-callback-*.js`,
+      `index-*.js`), típicos de un build de producción: el error sale del app desplegado (Lovable,
+      build anterior a los fixes `48938de`/`6afdbae`) o de una pestaña cacheada. Volver a verificar
+      en `localhost:8080` (el server local de 06/09 21:31 corre código actual) con hard refresh y/o
+      redeploy en Lovable antes de dar por cerrado el flujo. Warnings de consola ajenos al bug:
+      "Permissions policy violation: unload", "field has no id/name", "no autocomplete", "No label
+      associated" (a11y leve).
