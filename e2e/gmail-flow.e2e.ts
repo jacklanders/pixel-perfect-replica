@@ -14,36 +14,52 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const authFile = path.join(__dirname, ".auth", "user.json");
 const hasAuth = fs.existsSync(authFile);
 
-const ESTADO_OAUTH = "e2e_oauth_state_123";
+// En CI/sin sesión real el server corre con MOCK_AUTH=true (login
+// determinístico) y no se necesita storageState; en local con Supabase real se
+// usa e2e/.auth/user.json. El estado de OAuth se inyecta por sessionStorage tal
+// como hace conectarGmail() en la UI.
+const isMockAuth = process.env.MOCK_AUTH === "true";
+
+// Con Supabase real (MOCK_AUTH=false) la sesión sale de e2e/.auth/user.json;
+// con mock auth el server asigna el usuario determinístico y no hace falta.
+if (!isMockAuth && hasAuth) {
+  test.use({ storageState: authFile });
+}
 
 // Corre con MOCK_GMAIL=true (webServer en playwright.config): exchange de
 // tokens y envío de la API real de Gmail se simulan del lado del servidor;
 // el límite diario (RPC), el marcado "sent" y los adjuntos en Storage son reales.
 test.describe("Flujo Gmail (mock)", () => {
-  test.skip(!hasAuth, "Saltado: no existe e2e/.auth/user.json. Generalo manualmente.");
-
-  test.use({ storageState: authFile });
+  test.skip(
+    !isMockAuth && !hasAuth,
+    "Saltado: no existe e2e/.auth/user.json (y MOCK_AUTH no está activo).",
+  );
   test.describe.configure({ mode: "serial" });
 
-  test("Conectar Gmail: callback simulado → estado conectado", async ({ page }) => {
-    // Preparar el state en sessionStorage como hace conectarGmail() en la UI.
+  test("Conectar Gmail: callback simulado vuelve a la postulación y activa enviar", async ({ page }) => {
+    // Crear una postulación real por la UI y usar SU ruta como origen: el
+    // callback debe volver a ella (con el botón "Enviar desde Gmail" activo),
+    // no a /perfil.
+    const detailUrl = await createApplication(page);
+    const origin = new URL(detailUrl).pathname;
+
+    // Como conectarGmail() en la UI: state con el origen embebido + fallback en sessionStorage.
+    const state = `e2e_state_${Date.now()}|${origin}`;
     await page.goto("/postulaciones/nueva");
     await page.evaluate(
-      (state) => sessionStorage.setItem("gmail_oauth_state", state),
-      ESTADO_OAUTH,
+      ({ state, origin }) => {
+        sessionStorage.setItem("gmail_oauth_state", state);
+        sessionStorage.setItem("gmail_oauth_origin", origin);
+      },
+      { state, origin },
     );
 
-    // Simular la vuelta de Google al callback con un code falso.
-    await page.goto(`/auth/gmail-callback?code=e2e-fake-code&state=${ESTADO_OAUTH}`);
+    // Simular la vuelta de Google al callback con un code falso y el MISMO state.
+    await page.goto(`/auth/gmail-callback?code=e2e-fake-code&state=${encodeURIComponent(state)}`);
 
-    // procesarGmailCallback con MOCK_GMAIL guarda tokens falsos y redirige al perfil.
-    await expect(page).toHaveURL(/\/perfil\?gmail=conectado/, { timeout: 15000 });
-    await expect(page.getByRole("heading", { name: "Tu perfil" }).first()).toBeVisible();
-
-    // Verificar "estado conectado" en la UI de envío: sin botón de conectar,
-    // con el de desconectar.
-    const detailUrl = await createApplication(page);
-    await page.goto(detailUrl);
+    await expect(page).toHaveURL(new RegExp(origin.replace(/\//g, "\\/") + "\\?gmail=conectado"), {
+      timeout: 15000,
+    });
     await expect(page.getByRole("button", { name: "Enviar desde Gmail" })).toBeVisible({
       timeout: 15000,
     });
