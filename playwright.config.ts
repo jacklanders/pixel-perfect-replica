@@ -20,6 +20,13 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
-    env: { MOCK_AI: "true", MOCK_GMAIL: "true", MOCK_AUTH: "true" }, //
+    env: {
+      MOCK_AI: "true",
+      MOCK_GMAIL: "true",
+      // Por defecto el server corre con login determinístico (MOCK_AUTH=true).
+      // Para autenticación real (Supabase local + e2e/.auth/user.json) correr
+      // con MOCK_AUTH=false: las specs derivan el mismo criterio del runner env.
+      MOCK_AUTH: process.env.MOCK_AUTH ?? "true",
+    },
   },
 });

@@ -82,3 +82,21 @@ Pendiente de integración:
 - Tests E2E de login real una vez cargadas las credenciales (los tests E2E
   mockeados existentes solo validan la UI y los contratos de integración).
 
+--------------------------------------------------------------------
+v3.latest — Fix CI e2e (GitHub Actions): collection crash y MOCK_AUTH
+--------------------------------------------------------------------
+- e2e/login.e2e.ts: el `test.skip(isMockAuth, ...)(title, fn)` era inválido
+  (Playwright no lo soporta como wrapper; `test.skip(cond, msg)` se invoca
+  DENTRO del cuerpo y devuelve void). Hacía explotar TODO el runner e2e con
+  `TypeError: test.skip(...) is not a function` — las últimas ~15 runs de CI
+  quedaban rojas sin llegar a correr ninguna spec.
+- playwright.config.ts: el webServer ahora deriva `MOCK_AUTH` del env del
+  runner (`process.env.MOCK_AUTH ?? "true"`) en vez de forzar `true`, para que
+  specs y server compartan el mismo criterio. Para probar con autenticación
+  real (Supabase local + e2e/.auth/user.json): `MOCK_AUTH=false bun run test:e2e`.
+- e2e/login.e2e.ts: el test de redirección `/perfil → /login` sin sesión se
+  skipea salvo que se corra con `MOCK_AUTH=false`, consistente con la config.
+- Verificado local: 4 smoke pasan, 7 flujos con DB se saltan (igual que en CI,
+  que no tiene Supabase real ni e2e/.auth/user.json). auth.setup.ts queda fuera
+  del runner (testMatch es `*.e2e.ts`).
+

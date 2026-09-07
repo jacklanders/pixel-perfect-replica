@@ -140,12 +140,13 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
 Ultimamente ~15 runs en rojo. El job `e2e` (`bun run test:e2e` → `playwright test`) nunca llega a
 ejecutar las specs: el collection se rompe durante la carga de `e2e/login.e2e.ts`.
 
-- [ ] **`e2e/login.e2e.ts:16` — collection crash: `TypeError: test.skip(...) is not a function`.**
+- [x] **`e2e/login.e2e.ts:16` — collection crash: `TypeError: test.skip(...) is not a function`.**
       `test.skip(isMockAuth, "...")("...", async ...)` no es válido en Playwright: `test.skip(cond,
       msg)` se invoca DENTRO del cuerpo de un test (devuelve `void`), no como wrapper que retorna un
       test. Rompe TODO el runner de e2e (`bun run test:e2e` — error exacto en el run). Fix: `test(...,
       () => { test.skip(isMockAuth, "..."); ... })`.
-- [ ] **`e2e` — mismatch de `MOCK_AUTH` entre webServer y specs.** `playwright.config.ts:23` fuerza
+      → Cerrado 06/09: skip movido al cuerpo del test.
+- [x] **`e2e` — mismatch de `MOCK_AUTH` entre webServer y specs.** `playwright.config.ts:23` fuerza
       `MOCK_AUTH: "true"` en el env del webServer (local y CI), pero `login.e2e.ts:3` deriva
       `isMockAuth = process.env.MOCK_AUTH === "true"` del env del RUNNER, que en CI no está seteado.
       Aunque se corra la colección, ese test (redirect `/perfil → /login` sin sesión) se ejecutaría
@@ -153,6 +154,11 @@ ejecutar las specs: el collection se rompe durante la carga de `e2e/login.e2e.ts
       criterio de skip a la config del webServer y revisar el resto de specs (`auth.setup.ts` comenta
       puerto 3000 y `storageState` no está cableado en los projects; `gmail-flow`/`postulaciones`)
       para dejar el job verde en CI.
+      → Cerrado 06/09: webServer usa `process.env.MOCK_AUTH ?? "true"`; el test de sesión skipea
+      salvo `MOCK_AUTH=false`. Verificado local: 4 smoke pasan, 7 flujos con DB skip (igual que CI).
+- [ ] **Cleanup menor (opcional): `e2e/auth.setup.ts` es dead code** — testMatch es `*.e2e.ts` y
+      `auth.setup.ts` no calza, así que nunca corre; el `storageState` (e2e/.auth/user.json) que
+      referencia no está cableado en `projects`. Borrar o cablear bien el setup de auth.
 - [ ] **Callback Gmail: error `connected_at` aún visible en browser (dato 06/09).** El código actual
       NO referencia `connected_at` (grep verificado; solo comentarios en `gmail-oauth.ts:241` y
       `types.ts:194`). La consola mostraba nombres de bundle hasheados (`auth.gmail-callback-*.js`,
