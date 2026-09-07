@@ -34,10 +34,11 @@ export const generarGmailAuthUrl = createServerFn({ method: "GET" })
   });
 
 // ─── Procesar callback de Gmail OAuth ───
-// Las tablas oauth_connections/oauth_connection_status son service_role-only
-// (RLS de 0001_init.sql): escribir el token y el flag connected=true con el
-// cliente anon del usuario falla siempre en silencio. Acá se usa el service
-// client (el middleware solo garantiza que haya un usuario autenticado).
+// La tabla oauth_connections es service_role-only (RLS de 0001_init.sql).
+// oauth_connection_status NO existe en el Supabase real: "conectado" se deriva
+// de la fila en oauth_connections. Escribir con el cliente anon del usuario
+// falla siempre en silencio; acá se usa el service client (el middleware solo
+// garantiza que haya un usuario autenticado).
 export const procesarGmailCallback = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator(z.object({ code: z.string().min(1) }))

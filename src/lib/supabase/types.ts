@@ -190,20 +190,17 @@ export function normalizarContenidoCv(value: Json | null | undefined): CvConteni
 }
 
 // ─── OAuth (Gmail) ───
+// Schema REAL del Supabase de producción (Lovable Cloud), no el de 0001/0007:
+// no hay connected_at/revoked_at/encrypted_refresh_token ni oauth_connection_status.
 export interface OAuthConnectionRow {
+  id?: string;
   user_id: string;
   provider: string;
+  scopes: string[] | null;
+  access_token: string | null;
+  refresh_token: string | null;
   encrypted_access_token: string | null;
-  encrypted_refresh_token: string | null;
-  scopes: string[];
-  connected_at: string;
-  revoked_at: string | null;
   expires_at: string | null;
-}
-
-export interface OAuthConnectionStatusRow {
-  user_id: string;
-  provider: string;
-  connected: boolean;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }

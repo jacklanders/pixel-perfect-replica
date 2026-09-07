@@ -55,7 +55,6 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     rpcNames = [];
 
     client.handlers["app_settings"] = () => rowResult({ value: "10" });
-    client.handlers["oauth_connection_status"] = () => rowResult(null);
     client.handlers["profiles"] = () => rowResult({ user_id: "user-1", email: "juan@test.com" });
 
     client.handlers["applications"] = (op) => {
@@ -83,7 +82,7 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     client.handlers["oauth_connections"] = () =>
       rowResult({
         encrypted_access_token: accessEnc,
-        encrypted_refresh_token: refreshEnc,
+        refresh_token: null,
         expires_at: isoIn(60 * 60),
       });
     fetchStub.mockResolvedValue(fakeResponse(200, { id: "gmail-1" }));
@@ -120,7 +119,7 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     client.handlers["oauth_connections"] = () =>
       rowResult({
         encrypted_access_token: accessEnc,
-        encrypted_refresh_token: null,
+        refresh_token: null,
         expires_at: isoIn(60 * 60),
       });
     client.downloadHandler = async () =>
@@ -152,7 +151,7 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     client.handlers["oauth_connections"] = () =>
       rowResult({
         encrypted_access_token: accessEnc,
-        encrypted_refresh_token: refreshEnc,
+        refresh_token: refreshEnc,
         expires_at: new Date(Date.now() - 1000).toISOString(),
       });
     fetchStub.mockImplementation(async (input: unknown) => {
@@ -167,13 +166,12 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
       status: 400,
     });
 
-    // No hubo update de la postulación → quedó en pending. La conexión se marcó desconectada.
+    // No hubo update de la postulación → quedó en pending. La conexión se borró
+    // (no hay tabla de estado: revocado = fila eliminada de oauth_connections).
     const updateOp = client.calls.find((c) => c.op === "update" && c.table === "applications");
     expect(updateOp).toBeUndefined();
-    const statusOp = client.calls.find(
-      (c) => c.op === "upsert" && c.table === "oauth_connection_status",
-    );
-    expect((statusOp!.payload as { connected: boolean }).connected).toBe(false);
+    const delOp = client.calls.find((c) => c.op === "delete" && c.table === "oauth_connections");
+    expect(delOp).toBeDefined();
 
     // El envío falló → la reserva de cuota se libera.
     expect(rpcNames).toContain("increment_daily_usage");
@@ -185,7 +183,7 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     client.handlers["oauth_connections"] = () =>
       rowResult({
         encrypted_access_token: accessEnc,
-        encrypted_refresh_token: null,
+        refresh_token: null,
         expires_at: isoIn(60 * 60),
       });
     client.rpcHandler = async () => rowResult([{ allowed: false }]);
@@ -219,7 +217,7 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     client.handlers["oauth_connections"] = () =>
       rowResult({
         encrypted_access_token: accessEnc,
-        encrypted_refresh_token: null,
+        refresh_token: null,
         expires_at: isoIn(60 * 60),
       });
     client.handlers["applications"] = (op) => {

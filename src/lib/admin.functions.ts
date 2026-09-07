@@ -63,10 +63,12 @@ export const getAdminDashboard = createServerFn({ method: "GET" })
           .select("id", { count: "exact", head: true })
           .eq("status", "sent"),
         service.from("job_posts").select("id", { count: "exact", head: true }),
+        // oauth_connection_status no existe en el Supabase real: "conectado" =
+        // fila en oauth_connections (una por usuario+provider).
         service
-          .from("oauth_connection_status")
+          .from("oauth_connections")
           .select("user_id", { count: "exact", head: true })
-          .eq("connected", true),
+          .eq("provider", "google_gmail"),
         service
           .from("daily_usage")
           .select("usage_date, application_generations, ai_calls, cost_estimate_usd")

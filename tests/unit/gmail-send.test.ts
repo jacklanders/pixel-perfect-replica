@@ -56,7 +56,6 @@ describe("enviarPostulacionGmail", () => {
 
     // Límite por defecto (10MB).
     client.handlers["app_settings"] = () => rowResult({ value: "10" });
-    client.handlers["oauth_connection_status"] = () => rowResult(null);
 
     // Token vigente (no expira, no toca la red).
     const accessEnc = await encrypt("access-valid");
@@ -64,7 +63,7 @@ describe("enviarPostulacionGmail", () => {
     client.handlers["oauth_connections"] = () =>
       rowResult({
         encrypted_access_token: accessEnc,
-        encrypted_refresh_token: refreshEnc,
+        refresh_token: refreshEnc,
         expires_at: isoIn(60 * 60),
       });
 
@@ -255,12 +254,11 @@ describe("enviarPostulacionGmail", () => {
       }),
     ).rejects.toMatchObject({ name: "GoogleRefreshError", status: 400 });
 
-    // No hubo llamada exitosa a la API y la conexión quedó marcada como desconectada.
+    // No hubo llamada exitosa a la API y la conexión quedó eliminada (no hay
+    // tabla de estado: revocado = fila borrada de oauth_connections).
     expect(gmailCalls()).toHaveLength(1);
-    const statusOp = client.calls.find(
-      (c) => c.op === "upsert" && c.table === "oauth_connection_status",
-    );
-    expect((statusOp!.payload as { connected: boolean }).connected).toBe(false);
+    const delOp = client.calls.find((c) => c.op === "delete" && c.table === "oauth_connections");
+    expect(delOp).toBeDefined();
   });
 
   it("adjunta un archivo temporal y lo borra de Storage tras el envío exitoso", async () => {

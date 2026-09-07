@@ -91,7 +91,7 @@ export interface GoogleTokenResponse {
 }
 
 // En modo E2E (MOCK_GMAIL=true) devolvemos tokens falsos sin tocar el OAuth de Google.
-// La DB (oauth_connections/oauth_connection_status) sigue escribiéndose de verdad.
+// La DB (oauth_connections) sigue escribiéndose de verdad.
 export async function exchangeCodeForTokens(code: string): Promise<GoogleTokenResponse> {
   if (getEnv("MOCK_GMAIL") === "true") {
     return {
@@ -160,19 +160,18 @@ export async function refreshAccessToken(
 }
 
 // ─── Marcar conexión como desconectada (refresh token revocado/expirado) ───
+// La tabla oauth_connection_status NO existe en el Supabase real (Lovable Cloud
+// nunca la creó): "conectado" se deriva de la existencia de la fila en
+// oauth_connections con refresh token. Al revocarse el token, se borra la fila.
 export async function markGmailDisconnected(
   userId: string,
   supabase: SupabaseClient,
 ): Promise<void> {
-  const { error } = await supabase.from("oauth_connection_status").upsert(
-    {
-      user_id: userId,
-      provider: "google_gmail",
-      connected: false,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,provider" },
-  );
+  const { error } = await supabase
+    .from("oauth_connections")
+    .delete()
+    .eq("user_id", userId)
+    .eq("provider", "google_gmail");
   if (error) throw new Error(`Error marcando desconexión: ${error.message}`);
 }
 
@@ -234,6 +233,17 @@ export function buildGmailAuthUrl(state: string): string {
 }
 
 // ─── Guardar tokens en DB ───
+// Schema REAL del Supabase de producción (fuente de verdad, difiere de las
+// migraciones 0001/0007): oauth_connections tiene las columnas id, user_id,
+// provider, scopes, access_token, refresh_token, expires_at, created_at,
+// updated_at, encrypted_access_token. NO tiene connected_at, revoked_at ni
+// encrypted_refresh_token, y oauth_connection_status no existe.
+//
+// El refresh token se persiste CIFRADO dentro de la columna refresh_token (la
+// única disponible): nada externo la lee (RLS: solo service_role) y el valor
+// encriptado impide su uso fuera de esta app. Se usa select-then-update/insert
+// en vez de upsert con onConflict porque la PK real de la tabla no garantiza
+// (user_id, provider).
 export async function saveGmailTokens(
   userId: string,
   tokens: GoogleTokenResponse,
@@ -242,34 +252,36 @@ export async function saveGmailTokens(
   const encryptedAccess = await encrypt(tokens.access_token);
   const encryptedRefresh = tokens.refresh_token ? await encrypt(tokens.refresh_token) : null;
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+  const now = new Date().toISOString();
 
-  const { error } = await supabase.from("oauth_connections").upsert(
-    {
-      user_id: userId,
-      provider: "google_gmail",
-      encrypted_access_token: encryptedAccess,
-      encrypted_refresh_token: encryptedRefresh,
-      scopes: [tokens.scope],
-      connected_at: new Date().toISOString(),
-      revoked_at: null,
-      expires_at: expiresAt,
-    },
-    { onConflict: "user_id,provider" },
-  );
+  const { data: existing, error: readError } = await supabase
+    .from("oauth_connections")
+    .select("provider")
+    .eq("user_id", userId)
+    .eq("provider", "google_gmail")
+    .maybeSingle();
+
+  if (readError) throw new Error(`Error guardando tokens: ${readError.message}`);
+
+  const payload = {
+    scopes: [tokens.scope],
+    encrypted_access_token: encryptedAccess,
+    refresh_token: encryptedRefresh,
+    expires_at: expiresAt,
+    updated_at: now,
+  };
+
+  const { error } = existing
+    ? await supabase
+        .from("oauth_connections")
+        .update(payload)
+        .eq("user_id", userId)
+        .eq("provider", "google_gmail")
+    : await supabase
+        .from("oauth_connections")
+        .insert({ user_id: userId, provider: "google_gmail", ...payload, created_at: now });
 
   if (error) throw new Error(`Error guardando tokens: ${error.message}`);
-
-  const { error: statusError } = await supabase.from("oauth_connection_status").upsert(
-    {
-      user_id: userId,
-      provider: "google_gmail",
-      connected: true,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,provider" },
-  );
-
-  if (statusError) throw new Error(`Error actualizando estado: ${statusError.message}`);
 }
 
 // ─── Obtener access token válido (con auto-refresh) ───
@@ -279,10 +291,10 @@ export async function getValidAccessToken(
 ): Promise<string> {
   const { data, error } = await supabase
     .from("oauth_connections")
-    .select("encrypted_access_token, encrypted_refresh_token, expires_at")
+    .select("encrypted_access_token, refresh_token, expires_at")
     .eq("user_id", userId)
     .eq("provider", "google_gmail")
-    .single();
+    .maybeSingle();
 
   if (error || !data) throw new Error("No hay conexión Gmail activa");
 
@@ -294,11 +306,11 @@ export async function getValidAccessToken(
     return decrypt(data.encrypted_access_token);
   }
 
-  if (!data.encrypted_refresh_token) {
+  if (!data.refresh_token) {
     throw new Error("Token expirado y no hay refresh token disponible");
   }
 
-  const refreshToken = await decrypt(data.encrypted_refresh_token);
+  const refreshToken = await decrypt(data.refresh_token);
   return refreshAndStoreTokens(userId, refreshToken, supabase);
 }
 
@@ -309,16 +321,16 @@ export async function forceRefreshAccessToken(
 ): Promise<string> {
   const { data } = await supabase
     .from("oauth_connections")
-    .select("encrypted_refresh_token")
+    .select("refresh_token")
     .eq("user_id", userId)
     .eq("provider", "google_gmail")
-    .single();
+    .maybeSingle();
 
-  if (!data?.encrypted_refresh_token) {
+  if (!data?.refresh_token) {
     throw new Error("No hay refresh token para forzar renovación");
   }
 
-  const refreshToken = await decrypt(data.encrypted_refresh_token);
+  const refreshToken = await decrypt(data.refresh_token);
   return refreshAndStoreTokens(userId, refreshToken, supabase);
 }
 
@@ -326,14 +338,14 @@ export async function forceRefreshAccessToken(
 export async function disconnectGmail(userId: string, supabase: SupabaseClient): Promise<void> {
   const { data } = await supabase
     .from("oauth_connections")
-    .select("encrypted_refresh_token")
+    .select("refresh_token")
     .eq("user_id", userId)
     .eq("provider", "google_gmail")
-    .single();
+    .maybeSingle();
 
-  if (data?.encrypted_refresh_token) {
+  if (data?.refresh_token) {
     try {
-      const refreshToken = await decrypt(data.encrypted_refresh_token);
+      const refreshToken = await decrypt(data.refresh_token);
       await revokeGoogleToken(refreshToken);
     } catch {
       // continuar igual
@@ -345,16 +357,6 @@ export async function disconnectGmail(userId: string, supabase: SupabaseClient):
     .delete()
     .eq("user_id", userId)
     .eq("provider", "google_gmail");
-
-  await supabase.from("oauth_connection_status").upsert(
-    {
-      user_id: userId,
-      provider: "google_gmail",
-      connected: false,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,provider" },
-  );
 }
 
 // ─── Verificar estado de conexión ───
@@ -373,9 +375,11 @@ export async function isGmailConnected(
     return { connected: true, email: profile?.email ?? null };
   }
 
+  // No existe oauth_connection_status: "conectado" = hay fila con refresh token
+  // guardado en oauth_connections (los desconectados se borran de la tabla).
   const { data, error } = await supabase
-    .from("oauth_connection_status")
-    .select("connected")
+    .from("oauth_connections")
+    .select("refresh_token")
     .eq("user_id", userId)
     .eq("provider", "google_gmail")
     .maybeSingle();
@@ -383,7 +387,7 @@ export async function isGmailConnected(
   if (error) throw new Error(error.message);
 
   return {
-    connected: data?.connected ?? false,
+    connected: data?.refresh_token != null,
     email: profile?.email ?? null,
   };
 }

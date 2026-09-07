@@ -25,8 +25,8 @@ describe("gmail-oauth", () => {
     fetchStub = vi.fn();
     globalThis.fetch = fetchStub as typeof fetch;
 
-    // Defaults: conexión de estado y RPC responden OK.
-    client.handlers["oauth_connection_status"] = () => rowResult(null);
+    // Defaults: conexión (filas de oauth_connections) y RPC responden OK.
+    client.handlers["oauth_connections"] = () => rowResult(null);
     client.rpcHandler = async () => rowResult([{ allowed: true }]);
   });
 
@@ -68,7 +68,7 @@ describe("gmail-oauth", () => {
       client.handlers["oauth_connections"] = () =>
         rowResult({
           encrypted_access_token: accessEnc,
-          encrypted_refresh_token: null,
+          refresh_token: null,
           expires_at: isoIn(60 * 60),
         });
 
@@ -84,7 +84,7 @@ describe("gmail-oauth", () => {
       client.handlers["oauth_connections"] = () =>
         rowResult({
           encrypted_access_token: oldAccessEnc,
-          encrypted_refresh_token: refreshEnc,
+          refresh_token: refreshEnc,
           expires_at: isoAgo(60),
         });
       fetchStub.mockResolvedValue(
@@ -114,7 +114,7 @@ describe("gmail-oauth", () => {
       client.handlers["oauth_connections"] = () =>
         rowResult({
           encrypted_access_token: accessEnc,
-          encrypted_refresh_token: refreshEnc,
+          refresh_token: refreshEnc,
           expires_at: isoAgo(60),
         });
       fetchStub.mockResolvedValue(fakeResponse(400, "invalid_grant"));
@@ -124,11 +124,10 @@ describe("gmail-oauth", () => {
         status: 400,
       });
 
-      const statusOp = client.calls.find(
-        (c) => c.op === "upsert" && c.table === "oauth_connection_status",
-      );
-      expect(statusOp).toBeDefined();
-      expect((statusOp!.payload as { connected: boolean }).connected).toBe(false);
+      // No existe oauth_connection_status: al revocarse el token se borra la fila.
+      const delOp = client.calls.find((c) => c.op === "delete" && c.table === "oauth_connections");
+      expect(delOp).toBeDefined();
+      expect(delOp!.filters).toContainEqual(["provider", "google_gmail"]);
     });
 
     it("sin conexión activa lanza un error claro", async () => {
@@ -142,7 +141,7 @@ describe("gmail-oauth", () => {
 
   describe("forceRefreshAccessToken", () => {
     it("lanza error si no hay refresh token", async () => {
-      client.handlers["oauth_connections"] = () => rowResult({ encrypted_refresh_token: null });
+      client.handlers["oauth_connections"] = () => rowResult({ refresh_token: null });
 
       await expect(oauth.forceRefreshAccessToken("user-1", fake())).rejects.toThrow(
         "No hay refresh token para forzar renovación",
@@ -151,16 +150,13 @@ describe("gmail-oauth", () => {
   });
 
   describe("markGmailDisconnected", () => {
-    it("escribe connected=false en oauth_connection_status", async () => {
+    it("borra la conexión real de oauth_connections (no hay tabla de estado)", async () => {
       await oauth.markGmailDisconnected("user-1", fake());
 
-      const statusOp = client.calls.find(
-        (c) => c.op === "upsert" && c.table === "oauth_connection_status",
-      );
-      expect(statusOp).toBeDefined();
-      const payload = statusOp!.payload as { connected: boolean; provider: string };
-      expect(payload.connected).toBe(false);
-      expect(payload.provider).toBe("google_gmail");
+      const delOp = client.calls.find((c) => c.op === "delete" && c.table === "oauth_connections");
+      expect(delOp).toBeDefined();
+      expect(delOp!.filters).toContainEqual(["user_id", "user-1"]);
+      expect(delOp!.filters).toContainEqual(["provider", "google_gmail"]);
     });
   });
 
