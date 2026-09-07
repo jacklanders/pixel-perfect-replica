@@ -94,32 +94,61 @@ export class GmailApiError extends Error {
   }
 }
 
+// Error cuando el resultado del envío es AMBIGUO: la petición a Gmail pudo
+// haber llegado (caída de red sin respuesta, o 200 cuya respuesta no se pudo
+// leer). No se reintenta ni se revierte la cuota: un reintento mandaría un 2º
+// correo idéntico.
+export class GmailEnvioAmbiguoError extends Error {
+  constructor(
+    message = "No se confirmó si el correo se envió (Gmail no respondió). Revisá la bandeja de enviados antes de reintentar.",
+  ) {
+    super(message);
+    this.name = "GmailEnvioAmbiguoError";
+  }
+}
+
 // ─── Call Gmail API ───
 async function sendGmailRaw(accessToken: string, rawBase64Url: string): Promise<{ id: string }> {
-  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ raw: rawBase64Url }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ raw: rawBase64Url }),
+    });
+  } catch {
+    // Sin respuesta: no sabemos si el correo llegó a Gmail. NO reintentar (un
+    // 2º intento duplicaría el mail) y dejar que el caller decida la cuota.
+    throw new GmailEnvioAmbiguoError();
+  }
 
   if (!res.ok) {
     const err = await res.text();
     throw new GmailApiError(res.status, `Gmail API error (${res.status}): ${err}`);
   }
 
-  return res.json() as Promise<{ id: string }>;
+  try {
+    return (await res.json()) as { id: string };
+  } catch {
+    // 200 con respuesta ilegible: el correo SÍ se aceptó (ok=2xx), pero sin id.
+    // Idem arriba: el resultado no se puede confirmar.
+    throw new GmailEnvioAmbiguoError();
+  }
 }
 
 // ─── Errores transitorios (429 rate-limit / 5xx) retryables con backoff ───
+// El retry SOLO se hace sobre errores HTTP definitivos (Gmail respondió NO):
+// nunca se reintenta un resultado ambiguo (sin respuesta / 200 ilegible), que
+// pudo dejar el correo mandado.
 const TRANSIENT_STATUS = (status: number) => status === 429 || status >= 500;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function sendWithTransientRetry(
   attempt: () => Promise<{ id: string }>,
-  maxRetries = 2,
+  maxRetries = 1,
 ): Promise<{ id: string }> {
   for (let i = 0; ; i++) {
     try {
@@ -141,9 +170,11 @@ async function sendGmailWithRetry(
   rawBase64Url: string,
   supabase: ReturnType<typeof getServiceClient>,
 ): Promise<{ id: string }> {
-  // En modo E2E (MOCK_GMAIL=true) no llamamos a la API de Gmail; el resto del
-  // flujo (límite diario vía RPC, marcar sent, adjuntos en Storage) sigue real.
-  if (getEnv("MOCK_GMAIL") === "true") {
+  // En modo E2E (MOCK_GMAIL=true, fuera de producción) no llamamos a la API de
+  // Gmail; el resto del flujo (límite diario vía RPC, marcar sent, adjuntos en
+  // Storage) sigue real. Nunca se activa en producción: un deploy con
+  // MOCK_GMAIL=true marcaría envíos como hechos sin mandar nada.
+  if (getEnv("MOCK_GMAIL") === "true" && getEnv("NODE_ENV") !== "production") {
     return { id: "mock-message-id" };
   }
 

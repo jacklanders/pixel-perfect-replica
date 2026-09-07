@@ -6,7 +6,7 @@
  * runtime de Start para ejecutarse).
  */
 
-import { enviarPostulacionGmail } from "@/lib/server/gmail-send";
+import { enviarPostulacionGmail, GmailEnvioAmbiguoError } from "@/lib/server/gmail-send";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -65,9 +65,10 @@ export async function enviarEmailGmailCore(argv: {
   }
 
   // A partir de acá la reserva quedó consumida (allowed=true). La cuota se
-  // revierte únicamente si el envío POR GMAIL falla: si el mail ya salió y lo
-  // que falla es la persistencia posterior, devolver la cuota dejaría que el
-  // reenvío duplique el correo y gaste doble cuota.
+  // revierte únicamente si el envío POR GMAIL fue rechazado de forma definitiva:
+  // si el resultado es ambiguo (no se sabe si el correo salió) o el mail ya
+  // salió y lo que falla es la persistencia posterior, devolver la cuota
+  // dejaría que el reenvío duplique el correo y gaste doble cuota.
   // 3. Preparar datos del email
   // El remitente sale del perfil del usuario en la DB (email confirmado), no
   // del valor de sesión/payload que pudiera llegar manipulable. Así el "From:"
@@ -113,12 +114,18 @@ export async function enviarEmailGmailCore(argv: {
       ...(adjunto ? { adjunto } : {}),
     }));
   } catch (err) {
-    // El envío por Gmail falló: liberar la reserva de cuota (la revocación no
-    // debe dejar un envío fallido contando en el límite del día).
-    try {
-      await supabase.rpc("decrement_daily_usage");
-    } catch {
-      // La reversión no debe enmascarar el error original del envío.
+    // El envío por Gmail falló de forma DEFINITIVA (rechazo HTTP evidente, token
+    // sin refrescar, etc.): liberar la reserva de cuota, porque no salió nada.
+    // En cambio, si el resultado es AMBIGUO (GmailEnvioAmbiguoError: la petición
+    // pudo haber llegado aunque no hubo respuesta, o hubo 200 ilegible), NO se
+    // revierte: el correo pudo haber salido, y devolver la cuota habilitaría un
+    // reintento que duplica el envío.
+    if (!(err instanceof GmailEnvioAmbiguoError)) {
+      try {
+        await supabase.rpc("decrement_daily_usage");
+      } catch {
+        // La reversión no debe enmascarar el error original del envío.
+      }
     }
     throw err;
   }

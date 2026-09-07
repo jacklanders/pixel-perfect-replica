@@ -73,6 +73,8 @@ describe("enviarPostulacionGmail", () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    delete gmailState.env["MOCK_GMAIL"];
+    delete gmailState.env["NODE_ENV"];
   });
 
   const gmailCalls = () => {
@@ -312,5 +314,96 @@ describe("enviarPostulacionGmail", () => {
         },
       }),
     ).rejects.toThrow("No se pudo leer el archivo adjuntado");
+  });
+
+  it("con MOCK_GMAIL=true fuera de producción devuelve el messageId mock sin llamar a la API", async () => {
+    client.handlers["resumes"] = () => rowResult(RESUMEN_GENERADO);
+    gmailState.env["MOCK_GMAIL"] = "true";
+    fetchStub.mockRejectedValue(new Error("no debería llamar a la API"));
+
+    const result = await enviarPostulacionGmail({
+      userId: "user-1",
+      fromEmail: "juan@test.com",
+      toEmail: "rrhh@empresa.com",
+      subject: "Postulación",
+      body: "Hola",
+      resumeId: "res-jack",
+      includeCopy: false,
+      adjunto: null,
+    });
+
+    expect(result.messageId).toBe("mock-message-id");
+    expect(fetchStub).not.toHaveBeenCalled();
+  });
+
+  it("con MOCK_GMAIL=true en producción NO mockea: el envío va por la API real", async () => {
+    client.handlers["resumes"] = () => rowResult(RESUMEN_GENERADO);
+    gmailState.env["MOCK_GMAIL"] = "true";
+    gmailState.env["NODE_ENV"] = "production";
+    fetchStub.mockRejectedValue(new TypeError("network unreachable"));
+
+    await expect(
+      enviarPostulacionGmail({
+        userId: "user-1",
+        fromEmail: "juan@test.com",
+        toEmail: "rrhh@empresa.com",
+        subject: "Postulación",
+        body: "Hola",
+        resumeId: "res-jack",
+        includeCopy: false,
+        adjunto: null,
+      }),
+    ).rejects.toMatchObject({ name: "GmailEnvioAmbiguoError" });
+
+    // No devolvió el id mock: intentó la API real y el fallo es ambiguo.
+    expect(gmailCalls()).toHaveLength(1);
+  });
+
+  it("si la petición a Gmail se pierde sin respuesta, NO reintenta y lanza error ambiguo", async () => {
+    client.handlers["resumes"] = () => rowResult(RESUMEN_GENERADO);
+    fetchStub.mockRejectedValue(new TypeError("connection reset"));
+
+    await expect(
+      enviarPostulacionGmail({
+        userId: "user-1",
+        fromEmail: "juan@test.com",
+        toEmail: "rrhh@empresa.com",
+        subject: "Postulación",
+        body: "Hola",
+        resumeId: "res-jack",
+        includeCopy: false,
+        adjunto: null,
+      }),
+    ).rejects.toMatchObject({ name: "GmailEnvioAmbiguoError" });
+
+    // Un solo intento: reintentar mandaría un 2º correo si el 1° sí llegó.
+    expect(gmailCalls()).toHaveLength(1);
+  });
+
+  it("si Gmail responde 200 pero la respuesta es ilegible, lanza error ambiguo sin reintentar", async () => {
+    client.handlers["resumes"] = () => rowResult(RESUMEN_GENERADO);
+    fetchStub.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => "Respuesta rara",
+      json: async () => {
+        throw new SyntaxError("Unexpected token R");
+      },
+    });
+
+    await expect(
+      enviarPostulacionGmail({
+        userId: "user-1",
+        fromEmail: "juan@test.com",
+        toEmail: "rrhh@empresa.com",
+        subject: "Postulación",
+        body: "Hola",
+        resumeId: "res-jack",
+        includeCopy: false,
+        adjunto: null,
+      }),
+    ).rejects.toMatchObject({ name: "GmailEnvioAmbiguoError" });
+
+    expect(gmailCalls()).toHaveLength(1);
   });
 });

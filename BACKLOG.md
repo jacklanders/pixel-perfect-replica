@@ -35,16 +35,14 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
       Fix 06/09 (commit pendiente) + test.
 
 ### Media
-- [ ] **`MOCK_GMAIL` sin guarda de producción** — `src/lib/server/gmail-send.ts:146`,
-      `src/lib/server/gmail-oauth.ts:96,372`. `getEnv("MOCK_GMAIL") === "true"` retorna éxito sin enviar
-      mail. A diferencia de `MOCK_AUTH` (reforzado con `isProduction()` en `src/lib/server/env.ts`),
-      `MOCK_GMAIL` no tiene esa guarda: un deploy de prod con la var seteada por error marcaría
-      postulaciones como enviadas que nunca salieron, silenciosamente. Fix: aplicar `isProduction()` igual
-      que `MOCK_AUTH`.
-- [ ] **Retry puede duplicar el envío** — `src/lib/server/gmail-send.ts` reintenta en 429/5xx
-      (`sendWithTransientRetry`); si el primer request sí llegó a Gmail y solo se perdió la respuesta, el
-      reintento manda un segundo email. Combinado con la idempotencia faltante, el riesgo de duplicados es
-      concreto. Fix: dedup (ej. mismo `Message-ID`) o verificar estado antes de reintentar.
+- [x] **`MOCK_GMAIL` sin guarda de producción** — ahora se exige `NODE_ENV !== "production"` en
+      `src/lib/server/gmail-send.ts:146`, `gmail-oauth.ts:96` y `gmail-oauth.ts:374`: un deploy de prod con
+      `MOCK_GMAIL=true` ya no marca envíos que nunca salieron ni conecta Gmail sin OAuth real. Fix 06/09.
+- [x] **Retry puede duplicar el envío** — los envíos con resultado AMBIGUO (petición sin respuesta o 200
+      ilegible: el correo pudo haber llegado a Gmail) ya no se reintentan: `GmailEnvioAmbiguoError` en
+      `gmail-send.ts`, y la cuota diaria NO se revierte en ese caso (revertirla habilitaría un reintento
+      que duplica el correo). El retry queda solo para rechazos HTTP definitivos (429/5xx/401+refresh),
+      donde Gmail respondió NO. Límite por intento bajado a 1 retry. Fix 06/09 + 5 tests.
 - [ ] **Prompt injection + sin límite de tamaño** — `src/lib/ai/ai-postulacion.functions.ts:30`,
       `src/lib/job-post.functions.ts:7`. `raw_text` (contenido del aviso, input del usuario) se interpola
       crudo en el prompt; `image_base64` no tiene `max()`. Daño acotado por el schema Zod, pero es un

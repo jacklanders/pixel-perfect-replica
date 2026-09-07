@@ -212,6 +212,27 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     expect(fetchStub).not.toHaveBeenCalled();
   });
 
+  it("si la respuesta de Gmail se pierde (ambiguo: el correo pudo haber salido), NO revierte la cuota ni marca sent", async () => {
+    const accessEnc = await oauth.encrypt("access-valid");
+    client.handlers["oauth_connections"] = () =>
+      rowResult({
+        encrypted_access_token: accessEnc,
+        refresh_token: null,
+        expires_at: isoIn(60 * 60),
+      });
+    fetchStub.mockRejectedValue(new TypeError("connection reset"));
+
+    await expect(enviarEmailGmailCore(coreArgs(client))).rejects.toMatchObject({
+      name: "GmailEnvioAmbiguoError",
+    });
+
+    // Se reservó la cuota pero NO se revirtió (el mail pudo haber salido).
+    const updateOp = client.calls.find((c) => c.op === "update" && c.table === "applications");
+    expect(updateOp).toBeUndefined();
+    expect(rpcNames).toContain("increment_daily_usage");
+    expect(rpcNames).not.toContain("decrement_daily_usage");
+  });
+
   it("si el UPDATE que marca 'sent' falla, NO revierte la cuota (el mail ya salió)", async () => {
     const accessEnc = await oauth.encrypt("access-valid");
     client.handlers["oauth_connections"] = () =>

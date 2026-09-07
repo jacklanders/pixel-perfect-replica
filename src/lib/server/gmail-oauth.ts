@@ -90,10 +90,12 @@ export interface GoogleTokenResponse {
   scope: string;
 }
 
-// En modo E2E (MOCK_GMAIL=true) devolvemos tokens falsos sin tocar el OAuth de Google.
-// La DB (oauth_connections) sigue escribiéndose de verdad.
+// En modo E2E (MOCK_GMAIL=true, fuera de producción) devolvemos tokens falsos
+// sin tocar el OAuth de Google. Nunca en producción (un deploy con MOCK_GMAIL
+// conectaría Gmail sin autorización real). La DB (oauth_connections) sigue
+// escribiéndose de verdad.
 export async function exchangeCodeForTokens(code: string): Promise<GoogleTokenResponse> {
-  if (getEnv("MOCK_GMAIL") === "true") {
+  if (getEnv("MOCK_GMAIL") === "true" && getEnv("NODE_ENV") !== "production") {
     return {
       access_token: "mock-access-token",
       refresh_token: "mock-refresh-token",
@@ -371,7 +373,7 @@ export async function isGmailConnected(
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (getEnv("MOCK_GMAIL") === "true") {
+  if (getEnv("MOCK_GMAIL") === "true" && getEnv("NODE_ENV") !== "production") {
     return { connected: true, email: profile?.email ?? null };
   }
 
