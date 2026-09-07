@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { getCurrentUser } from "@/lib/auth.functions";
+import { RouteError } from "@/components/RouteError";
 
 /**
  * Guard real de las rutas privadas: corre `beforeLoad` en el servidor (SSR y en
@@ -18,4 +19,5 @@ export const Route = createFileRoute("/_authenticated")({
     return { user };
   },
   component: () => <Outlet />,
+  errorComponent: RouteError,
 });

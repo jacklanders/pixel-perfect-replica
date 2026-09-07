@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 
 import { type Cv } from "@/lib/cv.model";
+import { cargarFotoComprimida } from "@/lib/foto-cv";
 import { getCvPrimario, getCvById, guardarCv, crearCv } from "@/lib/cv.functions";
 import { mejorarCvConJack } from "@/lib/ai/ai.functions";
 import { getMiPerfil } from "@/lib/perfil.functions";
@@ -458,17 +459,18 @@ function CvEditorPage() {
     });
   };
 
-  const handleFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
+    try {
+      const dataUrl = await cargarFotoComprimida(file);
       setForm((prev) =>
         prev ? { ...prev, contenido: { ...prev.contenido, fotoBase64: dataUrl } } : prev,
       );
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo cargar la foto");
+    }
   };
 
   const quitarFoto = () => {

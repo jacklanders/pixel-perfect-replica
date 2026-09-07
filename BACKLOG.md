@@ -67,15 +67,18 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
       "Enviar" viejo, que gastaba cuota sin mandar mail). Se verificó que ningún UI ni test lo usaba
       (el mutation `enviar` nunca se disparaba) y se eliminó con sus wrappers en `postulaciones.$id.tsx`.
       Fix 06/09.
-- [ ] Foto en base64 guardada íntegra en `structured_json` — `src/lib/cv.model.ts:48`, `cv.tsx:458-469`;
-      infla cada listado/save de CVs.
+- [x] Foto en base64 guardada íntegra en `structured_json` — la foto ahora se comprime al subirla en el
+      editor (`src/lib/foto-cv.ts`): JPEG de ~512px (~20-60 KB) en vez de los varios MB del original, que
+      inflaban cada listado/save de CVs. Sin cambios de schema; límite de 6MB al elegir archivo. Fix 06/09.
 - [x] Rate-limit en memoria con IP derivada de `x-forwarded-for` spooleable —
       `src/lib/server/rate-limit.ts` prioriza `CF-Connecting-IP` (Cloudflare Workers) sobre los headers
       inyectables. Fix 06/09.
 - [x] Sesión expirada con mensaje genérico "Unauthorized" — `src/lib/supabase/auth-middleware.ts` ahora
       distingue refresh fallido ("Tu sesión expiró…") de no-autenticado. Fix 06/09.
-- [ ] Error boundary solo en la raíz — una excepción en rutas `_authenticated` cae al fallback global
-      genérico (inglés). `src/routes/__root.tsx`.
+- [x] Error boundary solo en la raíz — nuevo `src/components/RouteError.tsx` (fallback en español con
+      "Intentar de nuevo" y "Volver al inicio") conectado como `errorComponent` de `_authenticated` en
+      `src/routes/_authenticated/route.tsx`; las excepciones en rutas privadas ya no caen al error global
+      en inglés. Fix 06/09.
 
 ## Pendientes técnicos no bloqueantes (fix del 18/08 — consolidación de auth)
 
@@ -125,3 +128,11 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
 
 - Guardar más de una versión de CV y que Jack sugiera cuál usar según el tipo de vacante
   (el esquema `resumes` ya soporta múltiples registros por usuario desde esta migración).
+
+## UI — pendientes de interfaz
+
+- [ ] **Landing: rebranding "PostulaYa! JACK" + logos de herramientas** — `src/routes/index.tsx:113`
+      hoy muestra "Jack · prototipo de interfaz". Cambiar a "PostulaYa! JACK" y agregar en esa zona los
+      logos de las IAs (Gemini AI, Claude AI, ChatGPT AI, Kimi AI, OpenCode AI — devs tool) y de los
+      editores (VS Code, Antigravity, Cursor, Sublime). Sin brand resources aún: decidir de dónde salen
+      los assets (SVG inline / íconos). Requerimiento del usuario 06/09.
