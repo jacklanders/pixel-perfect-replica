@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { initObservability } from "../lib/observability";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 function NotFoundComponent() {
   return (
@@ -108,6 +109,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
       { rel: "manifest", href: "/manifest.webmanifest" },
     ],
+    scripts: [
+      {
+        children: `(function(){try{var t=localStorage.getItem("jack-theme");if(t!=="classic"&&t!=="dark"&&t!=="ayu"){t="classic"}var r=document.documentElement;r.dataset.theme=t;if(t!=="classic"){r.classList.add("dark")}else{r.classList.remove("dark")}}catch(e){document.documentElement.dataset.theme="classic"}})();`,
+      },
+    ],
   }),
 
   shellComponent: RootShell,
@@ -143,6 +149,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <ThemeSwitcher />
       <Toaster position="bottom-right" />
     </QueryClientProvider>
   );
