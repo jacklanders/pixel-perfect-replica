@@ -52,7 +52,7 @@ function Landing() {
         <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 py-20 md:grid-cols-[1.05fr_1fr] md:py-28">
           <div>
             <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-ink-foreground/25 px-3 py-1 text-xs tracking-wide uppercase">
-              PostulaYa! JACK · Prototipo Fase 1
+              PostulaYa! JACK · MVP
             </p>
             <h1 className="font-display text-4xl leading-[1.05] font-bold md:text-6xl">
               Tu CV, trabajado
@@ -111,12 +111,12 @@ function Landing() {
       </section>
 
       <footer className="border-t border-border bg-secondary/40">
-        <div className="mx-auto max-w-6xl px-5 py-10 text-sm">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-4 px-5 py-6 text-sm">
           <p className="font-display text-lg font-bold text-foreground">PostulaYa! JACK</p>
-          <p className="mt-1 text-muted-foreground">
-            Hecha con las herramientas favoritas de los devs
-          </p>
-          <div className="mt-5 flex flex-col gap-3">
+          <span className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground">
+            Made with
+          </span>
+          <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
             <ToolBadges tools={IA_TOOLS} />
             <ToolBadges tools={EDITOR_TOOLS} />
           </div>

@@ -4,10 +4,10 @@ import { UserMenu } from "@/components/UserMenu";
 export function JackMark({ className = "" }: { className?: string }) {
   return (
     <span className={`inline-flex items-center gap-2 font-display ${className}`}>
-      <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
-        J
+      <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground text-sm font-bold tracking-tight">
+        CV
       </span>
-      <span className="text-lg font-bold tracking-tight">Jack</span>
+      <span className="text-lg font-bold tracking-tight">PostulaYa! JACK</span>
     </span>
   );
 }
