@@ -101,18 +101,6 @@ function Landing() {
         </div>
       </section>
 
-      <section className="bg-secondary/50">
-        <div className="mx-auto max-w-6xl px-5 py-10 text-sm">
-          <p className="mb-4 font-medium text-secondary-foreground">
-            Hecha con las herramientas favoritas de los devs
-          </p>
-          <div className="flex flex-col gap-3">
-            <ToolBadges tools={IA_TOOLS} />
-            <ToolBadges tools={EDITOR_TOOLS} />
-          </div>
-        </div>
-      </section>
-
       <section className="border-t border-border bg-secondary/60">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-5 py-10 text-sm">
           <ShieldCheck className="size-5 text-primary" />
@@ -122,8 +110,17 @@ function Landing() {
         </div>
       </section>
 
-      <footer className="mx-auto max-w-6xl px-5 py-10 text-sm text-muted-foreground">
-        PostulaYa! JACK · prototipo de interfaz
+      <footer className="border-t border-border bg-secondary/40">
+        <div className="mx-auto max-w-6xl px-5 py-10 text-sm">
+          <p className="font-display text-lg font-bold text-foreground">PostulaYa! JACK</p>
+          <p className="mt-1 text-muted-foreground">
+            Hecha con las herramientas favoritas de los devs
+          </p>
+          <div className="mt-5 flex flex-col gap-3">
+            <ToolBadges tools={IA_TOOLS} />
+            <ToolBadges tools={EDITOR_TOOLS} />
+          </div>
+        </div>
       </footer>
     </div>
   );
