@@ -132,11 +132,15 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
 
 ## UI — pendientes de interfaz
 
-- [ ] **Landing: rebranding "PostulaYa! JACK" + logos de herramientas** — `src/routes/index.tsx:113`
+- [x] **Landing: rebranding "PostulaYa! JACK" + logos de herramientas** — `src/routes/index.tsx:113`
       hoy muestra "Jack · prototipo de interfaz". Cambiar a "PostulaYa! JACK" y agregar en esa zona los
       logos de las IAs (Gemini AI, Claude AI, ChatGPT AI, Kimi AI, OpenCode AI — devs tool) y de los
       editores (VS Code, Antigravity, Cursor, Sublime). Sin brand resources aún: decidir de dónde salen
       los assets (SVG inline / íconos). Requerimiento del usuario 06/09.
+      → **Cerrado 13/09**: títulos y footer a "PostulaYa! JACK"; el bloque de logos se movió del medio
+      de la landing al pie (footer), en el mismo orden (fila de IAs + fila de editores); se sumó el
+      logo de **Lovable** (SVG inline, gradiente real) a la fila de IAs. Vercel NO se agregó (pendiente
+      de decisión, ver sección de migración).
 
 ## CI — fallas de workflow (GitHub Actions, runner `ubuntu-latest`)
 
@@ -170,6 +174,28 @@ ejecutar las specs: el collection se rompe durante la carga de `e2e/login.e2e.ts
       → Cerrado 07/09: redeploy a producción (versión `2c0fe84c-…`), bundle verificado con el fix y
       flujo Gmail real OK en navegador; el error `connected_at` no reapareció.
 
+## Migración a Vercel — evaluación 13/09/2026 (pendiente de decisión)
+
+Consulta del usuario 13/09: siente que el link del worker (`https://app.postulaya-jack.workers.dev`)
+es largo y que el manejo de Cloudflare es denso. Evaluación técnica (no bloqueante, no ejecutada):
+
+- **Factible.** TanStack Start + Nitro soporta el preset de deploy `vercel` (hoy el build sale con el
+  preset de Workers vía `wrangler.json`); el deploy pasaría a Vercel CLI o a la integración de Vercel
+  con GitHub.
+- **Supabase no condiciona:** es un servicio externo; solo hay que reconfigurar el redirect URI de
+  Google OAuth y las Auth URLs de Supabase con el dominio nuevo (`https://<proyecto>.vercel.app` o
+  dominio custom).
+- **Env vars:** mismos nombres que hoy; se setean en Vercel como Environment Variables. Las `VITE_*`
+  quedan embebidas en build igual que ahora.
+- **Rate-limit:** `src/lib/server/rate-limit.ts` prioriza `CF-Connecting-IP` (header de Cloudflare).
+  En Vercel ese header no lo puebla nadie ⇒ cae al `x-forwarded-for`, que Vercel setea de forma
+  confiable (no rompe, pero re-verificar en smoke test post-migración).
+- **Alternativa sin migrar:** si el dolor es solo el dominio largo, configurar un dominio custom en
+  Cloudflare Workers resolvería sin tocar infra.
+
+→ Pendiente de decisión del usuario; si se ejecuta, documentar el cambio de preset en README y
+  re-verificar el smoke test (incluido Gmail) en el dominio nuevo.
+
 ## Pendientes activos — lista numerada (última actualización 07/09/2026)
 
 Acceso rápido a los pendientes abiertos del fuerde alcance, mejoras y CI. Cada ítem tiene su detalle
@@ -181,9 +207,9 @@ completo en las secciones de arriba; esta lista los resume y prioriza.
    Google Cloud Console los `auth/callback` permitidos (misma sección que el punto 1).
 3. **Seed del admin** — sembrar el primer usuario admin con insert directo en `user_roles` vía
    `service_role`, nunca desde un endpoint al cliente (Hito 0).
-4. **Landing: rebranding "PostulaYa! JACK" + logos de herramientas** — `src/routes/index.tsx:113`
-   muestra "Jack · prototipo de interfaz"; cambiar y sumar logos de IAs/editores (requerimiento
-   del usuario 06/09). **Siguiente a trabajar.**
+4. **Landing: rebranding "PostulaYa! JACK" + logos de herramientas** — **CERRADO 13/09**: títulos y
+   footer a "PostulaYa! JACK", logos movidos al pie en el mismo orden y logo de Lovable sumado a la
+   fila de IAs (ver sección "UI — pendientes de interfaz").
 5. **`login.tsx` ignora el `redirect`** que manda `_authenticated/route.tsx` — siempre cae a
    `/perfil` tras el login (mejora de UX, no bug).
 6. **Edición de avatar ("Cambiar foto")** no implementada — Hito 1 solo muestra el avatar de Google.
@@ -201,6 +227,9 @@ completo en las secciones de arriba; esta lista los resume y prioriza.
     placeholder (Hito 0).
 13. **Smoke test real: login con Google local (Docker) end-to-end**, incluyendo refresh de página
     logueado (ya estaba listado en "Pendientes Hito 1"; se consolida acá).
+14. **Evaluar migración de Cloudflare Workers → Vercel** — preset `vercel` de Nitro, env vars sin
+    cambio de nombres, reconfigurar Google OAuth + Supabase URLs con el dominio nuevo y chequear el
+    header de rate-limit. Detalle en la sección "Migración a Vercel" de arriba.
 
 Además, post-MVP (sin checkbox): guardar más de una versión de CV y que Jack sugiera cuál usar
 según el tipo de vacante ("Mejoras evaluadas para después del MVP").
