@@ -196,7 +196,34 @@ es largo y que el manejo de Cloudflare es denso. Evaluación técnica (no bloque
 → Pendiente de decisión del usuario; si se ejecuta, documentar el cambio de preset en README y
   re-verificar el smoke test (incluido Gmail) en el dominio nuevo.
 
-## Pendientes activos — lista numerada (última actualización 07/09/2026)
+## Frontend — cambios realizados 13/09/2026 (sesión de UI)
+
+Sesión 100% frontend/UI (sin backend ni e2e). `origin/main` quedó en `b3093d9`, deployado a producción
+(versión `0fc04f27`).
+
+- **Rebranding landing / footer:**
+  - El bloque "Hecha con las herramientas favoritas de los devs" se movió del medio de la landing al pie.
+  - Footer horizontal en una sola fila: `PostulaYa! JACK · MADE WITH: [iconos]`, chips compactos,
+    + lamparita de tema alineada a la derecha (misma altura, sin bloques flotantes).
+  - Logo **Lovable** (SVG inline con gradiente real naranja→rosa→azul) agregado a la fila de IAs.
+    Vercel NO se agregó (decisión; ver sección de migración).
+  - Marca del header: cajita **"CV"** + "PostulaYa! JACK" a la derecha (antes "J Jack").
+  - Badge del hero: "PostulaYa! JACK · MVP" (antes "Prototipo Fase 1").
+- **Theme switcher (lamparita):**
+  - Tres paletas: **Jack Classic** (actual), **Jack Dark** (oscuro con el teal de la marca),
+    **Jack Ayu** (paleta del tema *ayu* de VS Code/Sublime, variante dark: bg `#0B0E14`,
+    ámbar `#FFB454` como acento, azul `#59C2FF`, gris de comentario `#565B66`).
+  - Implementado con `data-theme` en `<html>` y paletas CSS en `src/styles.css`
+    (`[data-theme="dark"]` y `[data-theme="ayu"]`); `--grid-line`, gradientes y sombras por tema.
+  - Persistencia en `localStorage("jack-theme")` + script inline en el `<head>` (via `head().scripts`
+    en `src/routes/__root.tsx`) para aplicar el tema antes del primer paint (sin flash).
+  - UI en `src/components/ThemeSwitcher.tsx`: botón de lamparita que abre menú hacia arriba con check
+    en el tema activo. **No flota**: está integrado a la barra inferior (footer de la landing) y a un
+    footer nuevo en `src/components/AppShell.tsx` (área logueada).
+  - `chart.tsx` configura `THEMES` con selector `.dark`: para dark/ayu se hace toggle de la clase
+    `.dark` en `<html>`, así los `dark:` utilities siguen calzando.
+
+## Pendientes activos — lista numerada (última actualización 13/09/2026)
 
 Acceso rápido a los pendientes abiertos del fuerde alcance, mejoras y CI. Cada ítem tiene su detalle
 completo en las secciones de arriba; esta lista los resume y prioriza.
