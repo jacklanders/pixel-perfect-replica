@@ -3,6 +3,7 @@ import { ArrowRight, FileUp, MessagesSquare, Download, ShieldCheck } from "lucid
 import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { ToolBadges, IA_TOOLS, EDITOR_TOOLS } from "@/components/ToolLogos";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import heroImg from "@/assets/jack-hero.jpg";
 
 export const Route = createFileRoute("/")({
@@ -116,9 +117,12 @@ function Landing() {
           <span className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground">
             Made with:
           </span>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <ToolBadges tools={IA_TOOLS} />
             <ToolBadges tools={EDITOR_TOOLS} />
+          </div>
+          <div className="ml-auto">
+            <ThemeSwitcher />
           </div>
         </div>
       </footer>

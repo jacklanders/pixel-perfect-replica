@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { FileText, User, Sparkles, Briefcase, Loader2, ShieldCheck } from "lucide-react";
 import { JackMark } from "@/components/SiteHeader";
 import { UserMenu } from "@/components/UserMenu";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { getUsoDiario } from "@/lib/application.functions";
 import { getEsAdmin } from "@/lib/admin.functions";
 
@@ -148,6 +149,13 @@ export function AppShell({
           {children}
         </main>
       </div>
+
+      <footer className="border-t border-border bg-secondary/40">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 text-xs text-muted-foreground">
+          <p>PostulaYa! JACK · CV con IA</p>
+          <ThemeSwitcher />
+        </div>
+      </footer>
     </div>
   );
 }

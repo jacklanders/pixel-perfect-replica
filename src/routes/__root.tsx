@@ -12,7 +12,6 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { initObservability } from "../lib/observability";
-import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 function NotFoundComponent() {
   return (
@@ -149,7 +148,6 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
-      <ThemeSwitcher />
       <Toaster position="bottom-right" />
     </QueryClientProvider>
   );

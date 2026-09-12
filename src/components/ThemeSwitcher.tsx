@@ -49,18 +49,18 @@ export function ThemeSwitcher() {
   if (!mounted) return null;
 
   return (
-    <div ref={ref} className="fixed right-4 bottom-4 z-50">
+    <div ref={ref} className="relative">
       <button
         type="button"
         aria-label={open ? "Cerrar cambio de tema" : "Cambiar el tema de la página"}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="grid size-11 place-items-center rounded-full border border-border bg-card text-foreground shadow-soft transition-colors hover:bg-secondary"
+        className="grid size-10 place-items-center rounded-full border border-border bg-card text-foreground shadow-soft transition-colors hover:bg-secondary"
       >
         <Lightbulb className="size-5" />
       </button>
       {open && (
-        <div className="absolute right-0 bottom-14 w-48 rounded-xl border border-border bg-card p-1.5 text-sm shadow-lift">
+        <div className="absolute right-0 bottom-[calc(100%+0.5rem)] z-50 w-48 rounded-xl border border-border bg-card p-1.5 text-sm shadow-lift">
           <p className="px-2 py-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
             Tema
           </p>
