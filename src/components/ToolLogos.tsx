@@ -194,13 +194,13 @@ export const EDITOR_TOOLS: Tool[] = [
 
 export function ToolBadges({ tools }: { tools: Tool[] }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-1.5">
       {tools.map(({ name, Glyph }) => (
         <span
           key={name}
-          className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-1 text-[11px] font-medium whitespace-nowrap text-muted-foreground"
         >
-          <Glyph className="size-4 shrink-0" />
+          <Glyph className="size-3.5 shrink-0" />
           {name}
         </span>
       ))}

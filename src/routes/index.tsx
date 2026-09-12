@@ -114,9 +114,9 @@ function Landing() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-4 px-5 py-6 text-sm">
           <p className="font-display text-lg font-bold text-foreground">PostulaYa! JACK</p>
           <span className="text-[11px] font-semibold tracking-widest uppercase text-muted-foreground">
-            Made with
+            Made with:
           </span>
-          <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ToolBadges tools={IA_TOOLS} />
             <ToolBadges tools={EDITOR_TOOLS} />
           </div>
