@@ -90,13 +90,14 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
       (proyecto Lovable Cloud). El código, schema y migraciones se alinean contra Cloud; el
       `supabase/config.toml`/Docker local queda SOLO como espejo de desarrollo opcional, nunca como
       referencia. Decisión documentada en `CLAUDE.md` (sección Stack).
-- [ ] Confirmar en Auth → URL Configuration del proyecto Cloud (y en Google Cloud Console) que
+- [x] Confirmar en Auth → URL Configuration del proyecto Cloud (y en Google Cloud Console) que
       `http://localhost:8080/auth/callback` y el dominio de deploy (`https://app.postulaya-jack.workers.dev`)
       figuran en las Redirect URLs permitidas. `supabase/config.toml` no aplica a un proyecto Cloud.
-      → **Parcial 15/09**: en Auth → URL Configuration del Cloud quedaron agregados
+      → **Cerrado 15/09**: en Auth → URL Configuration del Cloud quedaron agregados
       `https://app.postulaya-jack.workers.dev/auth/callback` y `http://localhost:8080/auth/callback`.
-      Falta: en Google Cloud Console, el client de *Login con Google* debe tener como redirect URI
-      `https://<proyecto>.supabase.co/auth/v1/callback` (la de Supabase, no la de la app — `README.md` §OAuth).
+      En Google Cloud Console, Authorized redirect URIs cargadas: `https://kjlttxxwgumcqgswfrdl.supabase.co/auth/v1/callback`
+      (Login, la de Supabase), `https://app.postulaya-jack.workers.dev/auth/gmail-callback` (Gmail prod) y
+      `http://localhost:8080/auth/gmail-callback` (Gmail local).
 - [x] Confirmar que el schema real en el Supabase que están usando coincide con
       `supabase/migrations/0001` a `0003` — verificado 06/09: NO coincidía (Lovable Cloud nunca creó
       `oauth_connection_status` y su `oauth_connections` difiere de 0001/0007). Código alineado al schema
@@ -237,8 +238,9 @@ completo en las secciones de arriba; esta lista los resume y prioriza.
 1. **Supabase local vs Cloud** — **CERRADO 15/09**: Cloud es la fuente de verdad; el Docker local
    (`config.toml`) queda solo como espejo opcional (ver sección "Pendientes técnicos no bloqueantes
    (fix del 18/08…)" y `CLAUDE.md` → Stack).
-2. **Redirect URLs de login** — al ser Supabase Cloud, confirmar en Auth → URL Configuration y en
-   Google Cloud Console los `auth/callback` permitidos (misma sección que el punto 1).
+2. **Redirect URLs de login** — **CERRADO 15/09**: verificadas en Supabase Auth → URL Configuration
+   y en Google Cloud Console (Authorized redirect URIs del client: Supabase + Gmail prod + Gmail local;
+   ver sección "Pendientes técnicos no bloqueantes (fix del 18/08…)").
 3. **Seed del admin** — sembrar el primer usuario admin con insert directo en `user_roles` vía
    `service_role`, nunca desde un endpoint al cliente (Hito 0).
 4. **Landing: rebranding "PostulaYa! JACK" + logos de herramientas** — **CERRADO 13/09**: títulos y
