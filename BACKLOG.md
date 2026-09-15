@@ -128,9 +128,13 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
 - [ ] Generar assets de ícono PWA reales (192x192 y 512x512, maskable); hoy `manifest.webmanifest` apunta
       al `favicon.ico` existente como placeholder — el navegador va a tirar un warning/404 leve en
       consola hasta que se agreguen.
-- [ ] Al sembrar el primer usuario admin, hacerlo con un insert directo en `user_roles` vía
+- [x] Al sembrar el primer usuario admin, hacerlo con un insert directo en `user_roles` vía
       `service_role` (SQL en Supabase Studio o script server-side), nunca desde un endpoint expuesto al
-      cliente.
+      cliente. → **Cerrado 15/09**: `user_roles` NO existía en el Cloud real (0004 nunca aplicada);
+      se creó la tabla + `has_role()` en el SQL Editor (sections 1 y 4 de 0004) y se promovió a admin a
+      `juliocesarvelozo@gmail.com` (UUID `9b2c3c26-1a4e-4055-8041-d82763027c47`) con insert vía `service_role`.
+      Pendiente conexo: aplicar el resto de `0004_reconcile_live_schema.sql` al Cloud (fix de `handle_new_user`
+      y limpieza de `oauth_connections`) para alinear el schema real con el repo.
 
 ## Mejoras evaluadas para después del MVP
 
@@ -241,8 +245,9 @@ completo en las secciones de arriba; esta lista los resume y prioriza.
 2. **Redirect URLs de login** — **CERRADO 15/09**: verificadas en Supabase Auth → URL Configuration
    y en Google Cloud Console (Authorized redirect URIs del client: Supabase + Gmail prod + Gmail local;
    ver sección "Pendientes técnicos no bloqueantes (fix del 18/08…)").
-3. **Seed del admin** — sembrar el primer usuario admin con insert directo en `user_roles` vía
-   `service_role`, nunca desde un endpoint al cliente (Hito 0).
+3. **Seed del admin** — **CERRADO 15/09**: `user_roles` no existía en el Cloud real (0004 sin aplicar);
+   se creó tabla + `has_role()` y se promovió a admin `juliocesarvelozo@gmail.com` vía insert con
+   `service_role` en el SQL Editor.
 4. **Landing: rebranding "PostulaYa! JACK" + logos de herramientas** — **CERRADO 13/09**: títulos y
    footer a "PostulaYa! JACK", logos movidos al pie en el mismo orden y logo de Lovable sumado a la
    fila de IAs (ver sección "UI — pendientes de interfaz").
