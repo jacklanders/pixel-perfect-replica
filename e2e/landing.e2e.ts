@@ -10,9 +10,9 @@ test("la landing carga y muestra el título de Jack", async ({ page }) => {
 
 test("la landing muestra el rebranding y las herramientas declaradas", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("PostulaYa! JACK · Prototipo Fase 1")).toBeVisible();
+  await expect(page.getByText("PostulaYa! JACK · MVP")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Tu CV, trabajado");
-  await expect(page.getByText("Hecha con las herramientas favoritas de los devs")).toBeVisible();
+  await expect(page.getByText("Made with:")).toBeVisible();
   await expect(page.getByText("Gemini AI")).toBeVisible();
   await expect(page.getByText("Claude AI")).toBeVisible();
   await expect(page.getByText("ChatGPT AI")).toBeVisible();
