@@ -25,7 +25,7 @@ export const isSupabaseConfigured = !!supabaseUrl && !!supabaseAnonKey;
 if (!isSupabaseConfigured) {
   // Falla rápido y claro en dev en vez de un error de red confuso más adelante.
   console.error(
-    "[supabase] Faltan VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. Copiá .env.example a .env.local y completá los valores de `supabase start`.",
+    "[supabase] Faltan VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. Copiá .env.example a .env.local y completá los valores del proyecto Supabase Cloud (`https://<tu-proyecto>.supabase.co`).",
   );
 }
 

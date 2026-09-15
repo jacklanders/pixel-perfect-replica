@@ -83,14 +83,16 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
 
 ## Pendientes técnicos no bloqueantes (fix del 18/08 — consolidación de auth)
 
-- [ ] Decidir si usar Supabase local (Docker) o Cloud de forma definitiva, y documentarlo en
+- [x] Decidir si usar Supabase local (Docker) o Cloud de forma definitiva, y documentarlo en
       `CLAUDE.md` — hoy conviven señales de ambos (config.toml para local, pero el handoff de Copilot
       habla de Cloud).
-- [ ] Si el proyecto real es Supabase Cloud: ir al Dashboard → Authentication → URL Configuration y
-      confirmar que `http://localhost:8080/auth/callback` (o el dominio de deploy) está en la lista de
-      Redirect URLs permitidas. `supabase/config.toml` no aplica a un proyecto Cloud.
-      Si en cambio se sigue usando Supabase local, chequear que quedó igual el
-      Google Cloud Console con `http://127.0.0.1:54321/auth/v1/callback`.
+      → **Cerrado 15/09 (decisión del usuario, opción 1): Supabase Cloud es la fuente de verdad**
+      (proyecto Lovable Cloud). El código, schema y migraciones se alinean contra Cloud; el
+      `supabase/config.toml`/Docker local queda SOLO como espejo de desarrollo opcional, nunca como
+      referencia. Decisión documentada en `CLAUDE.md` (sección Stack).
+- [ ] Confirmar en Auth → URL Configuration del proyecto Cloud (y en Google Cloud Console) que
+      `http://localhost:8080/auth/callback` y el dominio de deploy (`https://app.postulaya-jack.workers.dev`)
+      figuran en las Redirect URLs permitidas. `supabase/config.toml` no aplica a un proyecto Cloud.
 - [x] Confirmar que el schema real en el Supabase que están usando coincide con
       `supabase/migrations/0001` a `0003` — verificado 06/09: NO coincidía (Lovable Cloud nunca creó
       `oauth_connection_status` y su `oauth_connections` difiere de 0001/0007). Código alineado al schema
@@ -228,9 +230,10 @@ Sesión 100% frontend/UI (sin backend ni e2e). `origin/main` quedó en `b3093d9`
 Acceso rápido a los pendientes abiertos del fuerde alcance, mejoras y CI. Cada ítem tiene su detalle
 completo en las secciones de arriba; esta lista los resume y prioriza.
 
-1. **Supabase local vs Cloud** — decidir de forma definitiva y documentarlo en `CLAUDE.md`
-   (sección "Pendientes técnicos no bloqueantes (fix del 18/08…)").
-2. **Redirect URLs de login** — si es Supabase Cloud, confirmar en Auth → URL Configuration y en
+1. **Supabase local vs Cloud** — **CERRADO 15/09**: Cloud es la fuente de verdad; el Docker local
+   (`config.toml`) queda solo como espejo opcional (ver sección "Pendientes técnicos no bloqueantes
+   (fix del 18/08…)" y `CLAUDE.md` → Stack).
+2. **Redirect URLs de login** — al ser Supabase Cloud, confirmar en Auth → URL Configuration y en
    Google Cloud Console los `auth/callback` permitidos (misma sección que el punto 1).
 3. **Seed del admin** — sembrar el primer usuario admin con insert directo en `user_roles` vía
    `service_role`, nunca desde un endpoint al cliente (Hito 0).

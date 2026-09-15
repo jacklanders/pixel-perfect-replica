@@ -43,15 +43,19 @@ bun run dev                     # servidor de dev en http://localhost:8080
 
 ### Base de datos (Supabase)
 
-Con **Supabase CLI** (levantar todo local, incluido Auth de Google):
+**Supabase Cloud es la fuente de verdad** (decisión 15/09): el código, el schema y las
+migraciones se alinean contra el proyecto Cloud (Lovable Cloud), donde viven los datos reales
+de producción. Aplicar cambios de schema contra Cloud:
 
 ```sh
-supabase start                  # usa supabase/config.toml (puerto 54321 por defecto)
-supabase db reset               # aplica supabase/migrations/ desde cero
+supabase link --project-ref <ref>   # vincula el repo al proyecto Cloud
+supabase db push                    # aplica supabase/migrations/ pendientes
 ```
 
-> Para usar un **proyecto remoto** en su lugar: `supabase link --project-ref <ref>` y
-> `supabase db push` (aplica las migraciones pendientes).
+> El `supabase/config.toml` + `supabase start` (Docker local) queda SOLO como espejo/mirror de
+> desarrollo opcional: no es la referencia y puede divergir del schema real. Los valores de
+> `.env.local` para dev deben apuntar al proyecto Cloud (`VITE_SUPABASE_URL` =
+> `https://<tu-proyecto>.supabase.co`).
 
 Al terminar, verificar en Supabase Studio que las tablas con datos de usuario tienen
 RLS habilitado (columna *RLS* en verde): `profiles`, `resumes`, `job_posts`,
@@ -103,8 +107,8 @@ Hay **dos credenciales OAuth distintas** (no confundirlas):
    - Local (CLI): `http://127.0.0.1:54321/auth/v1/callback`
    - Remoto: `https://<tu-proyecto>.supabase.co/auth/v1/callback`
 3. Copiar ID/secret a `.env.local` (`GOOGLE_OAUTH_CLIENT_ID`/`_SECRET`).
-4. En `supabase/config.toml` → `[auth.external.google]` usa `env(...)`; exportar las
-   variables antes de `supabase start`.
+4. (Solo si usás el espejo local) En `supabase/config.toml` → `[auth.external.google]`
+   usa `env(...)`; exportar las variables antes de `supabase start`.
 
 ### 2) Enviar mails por Gmail (app propia, token del usuario)
 

@@ -13,6 +13,12 @@ Memoria operativa corta. El prompt de producto completo vive en `README.md` y en
   `bun run build` → `npx wrangler login` → `npx nitro deploy --prebuilt`.
 - **Backend:** Supabase (Auth + Postgres + Storage). La lógica server (IA, OAuth Gmail,
   envío de mail) va en `createServerFn`/rutas API de TanStack, **no** en Edge Functions.
+- **Supabase — decisión (15/09/2026): Cloud es la fuente de verdad.** El proyecto real es
+  Supabase **Cloud** (proyecto de Lovable Cloud); el código, el schema y las migraciones se
+  alinean SIEMPRE contra Cloud, y los datos reales viven ahí. `supabase/config.toml` +
+  `supabase start` (Docker local) quedan SOLO como espejo/mirror de desarrollo opcional: NO es
+  la referencia y puede divergir. Aplicar cambios de schema contra Cloud (SQL Editor, o
+  `supabase link --project-ref <ref>` + `supabase db push`), nunca primero contra local.
 - **IA:** `AI_PROVIDER=gemini|anthropic`, solo desde `src/lib/server/`. `MOCK_AI=true`
   simula la extracción (E2E).
 
