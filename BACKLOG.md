@@ -93,6 +93,10 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
 - [ ] Confirmar en Auth → URL Configuration del proyecto Cloud (y en Google Cloud Console) que
       `http://localhost:8080/auth/callback` y el dominio de deploy (`https://app.postulaya-jack.workers.dev`)
       figuran en las Redirect URLs permitidas. `supabase/config.toml` no aplica a un proyecto Cloud.
+      → **Parcial 15/09**: en Auth → URL Configuration del Cloud quedaron agregados
+      `https://app.postulaya-jack.workers.dev/auth/callback` y `http://localhost:8080/auth/callback`.
+      Falta: en Google Cloud Console, el client de *Login con Google* debe tener como redirect URI
+      `https://<proyecto>.supabase.co/auth/v1/callback` (la de Supabase, no la de la app — `README.md` §OAuth).
 - [x] Confirmar que el schema real en el Supabase que están usando coincide con
       `supabase/migrations/0001` a `0003` — verificado 06/09: NO coincidía (Lovable Cloud nunca creó
       `oauth_connection_status` y su `oauth_connections` difiere de 0001/0007). Código alineado al schema
