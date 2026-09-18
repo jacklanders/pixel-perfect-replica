@@ -303,11 +303,35 @@ completo en las secciones de arriba; esta lista los resume y prioriza.
 12. **Assets de ícono PWA reales** (192x192 y 512x512, maskable) — hoy apunta a favicon como
      placeholder (Hito 0). → **CERRADO 18/09**: los tres PNGs existen en `public/` y el manifest los
      referencia (ver "Pendientes Hito 0").
-13. **Smoke test real: login con Google local (Docker) end-to-end**, incluyendo refresh de página
+13. **Smoke test real: login con Google end-to-end**, incluyendo refresh de página
     logueado (ya estaba listado en "Pendientes Hito 1"; se consolida acá).
+    → **Revisado 18/09**: se hace con Google real contra **producción** (Cloud es fuente de
+    verdad), no con Docker local — ver sección "Certificación del MVP" abajo.
 14. **Evaluar migración de Cloudflare Workers → Vercel** — preset `vercel` de Nitro, env vars sin
     cambio de nombres, reconfigurar Google OAuth + Supabase URLs con el dominio nuevo y chequear el
     header de rate-limit. Detalle en la sección "Migración a Vercel" de arriba.
 
 Además, post-MVP (sin checkbox): guardar más de una versión de CV y que Jack sugiera cuál usar
 según el tipo de vacante ("Mejoras evaluadas para después del MVP").
+
+## Certificación del MVP (18/09/2026 — freeze de features)
+
+Freeze de features: no agregar features grandes; certificar que lo existente funciona de punta a
+punta. Registrado a partir del reporte de estado del 18/09 (etapa = certificación, no construcción).
+
+- [ ] 🔴 **Smoke real Hito 1** — login con Google real contra producción
+      (`https://app.postulaya-jack.workers.dev`): login → `/perfil` → refresh (sesión viva) →
+      editar perfil → guardar → refresh → datos persisten. Anotar cada bug (S1).
+- [ ] 🔴 **Smoke vertical completo del MVP** — login → perfil → crear CV → guardar → Mis CV →
+      nuevo aviso → IA extrae → generar postulación → detalle → copiar → conectar Gmail → enviar →
+      "Enviada". Probar 2ª/3ª operación y el **límite diario** (el sistema de límites cambió 18/09).
+      Incluye validación funcional de IA real (Hito 2) y recorrido E2E de postulaciones (Hito 3) (S2).
+- [ ] 🟠 **Casos de error Gmail reales** — desconectado, token expirado, token revocado, 401, 429,
+      5xx, envío ambiguo, segundo envío (idempotencia), adjuntos en fallo (S3).
+- [ ] 🟠 **Observabilidad activada** — setear `VITE_SENTRY_DSN` + `VITE_POSTHOG_KEY` y confirmar que
+      llegan eventos de login/CV/extracción/postulación/copy/Gmail/límite (S4).
+- [ ] 🟡 **Documentación de cierre** — README (tabla 0001→0015 ya actualizada 18/09, commit `9d3b9d8`)
+      + BACKLOG + CHANGELOG, al declarar el MVP cerrado (S5).
+- [ ] 🟡 **Decidir Vercel** (solo decidir, no necesariamente migrar) — si el dolor es solo el dominio
+      largo, un dominio custom en Cloudflare Workers lo resuelve sin cambiar infra.
+- [ ] Luego de S1–S5: **declarar estado del Hito 5 / cierre del MVP**.
