@@ -90,6 +90,13 @@ describe("enviarPostulacionGmail", () => {
     return (init.headers as { Authorization: string }).Authorization as string;
   };
 
+  // Decodifica el MIME real que viaja a la API de Gmail (raw base64url).
+  const mimeOf = (callIndex: number): string => {
+    const init = fetchStub.mock.calls[callIndex]![1]!;
+    const raw = (JSON.parse(String(init.body)) as { raw: string }).raw;
+    return Buffer.from(raw, "base64url").toString("utf8");
+  };
+
   it("envía un CV generado por Jack (creado desde cero) y devuelve el messageId de Gmail", async () => {
     client.handlers["resumes"] = () => rowResult(RESUMEN_GENERADO);
     fetchStub.mockResolvedValue(fakeResponse(200, { id: "m1" }));
@@ -111,6 +118,12 @@ describe("enviarPostulacionGmail", () => {
     const gmail = gmailCalls();
     expect(gmail).toHaveLength(1);
     expect(bearerOf(gmail[0]!)).toBe("Bearer access-valid");
+
+    // El CV generado por Jack viaja como adjunto en el MIME.
+    const mime = mimeOf(gmail[0]!);
+    expect(mime).toContain("Content-Type: multipart/mixed");
+    expect(mime).toContain('Content-Disposition: attachment; filename="CV Desarrollador.pdf"');
+    expect(mime).toContain("Content-Type: application/pdf");
   });
 
   it("envía un CV subido como archivo (uploaded_pdf) descargándolo de Storage", async () => {
@@ -134,6 +147,12 @@ describe("enviarPostulacionGmail", () => {
 
     expect(result.messageId).toBe("m2");
     expect(gmailCalls()).toHaveLength(1);
+
+    // El PDF subido viaja como adjunto (mismo nombre, mime PDF, bytes en base64).
+    const mime = mimeOf(gmailCalls()[0]!);
+    expect(mime).toContain('Content-Disposition: attachment; filename="CV Adjunto Original.pdf"');
+    expect(mime).toContain("Content-Type: application/pdf");
+    expect(mime).toContain(Buffer.from("%PDF-1.4 mock").toString("base64"));
   });
 
   it("si la API devuelve 401, fuerza refresh del token y reintenta una vez", async () => {
