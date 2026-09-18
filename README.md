@@ -95,6 +95,14 @@ worker en Cloudflare).
 | `0005_drop_orphan_columns.sql` | Columnas huérfanas sin uso |
 | `0006_add_updated_at_to_applications.sql` | `updated_at` en `applications` |
 | `0007_add_oauth_expires_at.sql` | `expires_at` para OAuth tokens de Gmail |
+| `0008_decrement_daily_usage.sql` | RPC `decrement_daily_usage` (libera la reserva diaria si el envío Gmail falla; security definer) |
+| `0009_avatars_storage.sql` | Bucket público `avatars` con carpetas por usuario (`avatars/{user_id}/...`) |
+| `0010_add_avatar_url_back.sql` | Columna `profiles.avatar_url` (usada por `subirAvatar`/`quitarAvatar`) |
+| `0011_reconcile_oauth_live_schema.sql` | `oauth_connections` alineada al schema real de Lovable Cloud (defensivo) |
+| `0012_user_application_limits.sql` | Tabla de overrides de límite diario por usuario (`user_application_limits`) |
+| `0013_unify_profile_creation.sql` | `handle_new_user` se limita a sembrar `user_roles`; `getMiPerfil` queda como único creador de `profiles` |
+| `0014_profile_skills_resumen_columns.sql` | `profiles.skills` (text[]) y `resumen` (text) como fuente única (backfill desde `preferencias`) |
+| `0015_limite_diario_efectivo.sql` | RPC `obtener_limite_diario_efectivo` (override > default por rol > fallback; security definer) |
 
 ## Configuración OAuth de Google
 
