@@ -107,15 +107,14 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
       → **Cerrado 18/09**: el trigger `handle_new_user` ya NO inserta en `profiles` (solo siembra el rol
       `user` en `user_roles`); el alta de la fila es responsabilidad única de `getMiPerfil`
       (`0013_unify_profile_creation.sql`). El fallback es imprescindible (cubre MOCK_AUTH, donde no hay
-      fila en auth.users y el trigger nunca dispara). Pendiente operativo: aplicar `0013` en el Cloud
-      (cierra de paso el fix de handle_new_user del ítem 11).
+      fila en auth.users y el trigger nunca dispara). Aplicado al Cloud 18/09 ("Success. No rows returned").
 - [x] Decidir si `profiles.skills` (columna de `0002`) se usa de verdad o se elimina — `avatar_url`
       ya estaba en uso (avatares, 18/09).
       → **Cerrado 18/09**: se usa de verdad. Decisión: `skills` y `resumen` pasan a columnas reales
       (fuente única), el jsonb `preferencias` deja de almacenarlos. Incluye el fix de un bug latente:
       el save del `/perfil` DESCARTABA skills/resumen (zod los removía del payload). Migración
-      `0014_profile_skills_resumen_columns.sql` (backfill desde preferencias). Pendiente operativo:
-      aplicar `0014` en el Cloud.
+      `0014_profile_skills_resumen_columns.sql` (backfill desde preferencias). Aplicado al Cloud 18/09
+      (backfill sin filas legacy → no-op correcto).
 - [x] `login.tsx` no implementaba el `redirect` de vuelta que ahora manda `_authenticated/route.tsx`
       (`search: { redirect: location.href }`) — ignoraba el parámetro y siempre mandaba a `/perfil`.
       → **Cerrado 18/09**: el flujo completo ya está cableado — el guard redirige a `/login?redirect=`,
@@ -154,8 +153,9 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
       `juliocesarvelozo@gmail.com` (UUID `9b2c3c26-1a4e-4055-8041-d82763027c47`) con insert vía `service_role`.
       Pendiente conexo: aplicar el resto de `0004_reconcile_live_schema.sql` al Cloud (fix de `handle_new_user`
       y limpieza de `oauth_connections`) para alinear el schema real con el repo.
-      → Parcialmente cubierto 18/09: el fix de `handle_new_user` queda resuelto por `0013_unify_profile_creation.sql`
-      (aplicar en el SQL Editor). Resta solo la sección 3 de 0004: revoke de `oauth_connections` a anon/authenticated.
+      → **Cerrado 18/09**: 0013 (handle_new_user → solo user_roles), 0014 (columna resumen + backfill),
+      0012 (user_application_limits) y 0004 sección 3 (revoke oauth_connections) aplicados en el SQL Editor
+      (`Success. No rows returned` — backfill no-op).
 
 ## Mejoras evaluadas para después del MVP
 
@@ -284,15 +284,15 @@ completo en las secciones de arriba; esta lista los resume y prioriza.
    editable a mano (Hito 1). → **CERRADO 18/09**: editable con fallback a `firmaSugerida` y botón
    "Restaurar firma sugerida" (ver "Pendientes Hito 1").
 8. **Unificar el alta de perfil** — trigger (`0002`) + insert de fallback en `getMiPerfil` son
-   redundantes (fix del 18/08). → **CERRADO 18/09 (código)**: `0013_unify_profile_creation.sql` deja el
+   redundantes (fix del 18/08). → **CERRADO 18/09**: `0013_unify_profile_creation.sql` deja el
    trigger solo para `user_roles`; el alta de `profiles` queda en `getMiPerfil` (único creador).
-   Pendiente operativo: aplicar `0013` en el SQL Editor del Cloud.
+   Cloud aplicado 18/09.
 9. **`profiles.avatar_url` / `profiles.skills`** — decidir si se usan o se eliminan (hoy todo va a
    `preferencias` jsonb) — `avatar_url` ya se usa; sigue pendiente la decisión de `skills`.
    → **CERRADO 18/09**: `skills` (y `resumen`) pasan a columnas reales con backfill
    (`0014_profile_skills_resumen_columns.sql`); de paso se arregló que el save del `/perfil`
    descartara ambos campos. `src/lib/server/profile.ts` (getMyProfile/updateMyProfile) — dead code —
-   se eliminó. Pendiente operativo: aplicar `0014` en el Cloud.
+   se eliminó. Cloud aplicado 18/09.
 10. **`bun run test:e2e` de login sin mockear Supabase Auth** — agrega un mock de auth para no
      depender de Google real en CI (Hito 1). → **CERRADO 18/09**: el mock de auth es `MOCK_AUTH=true`
      (inyecta `test@jack.local` vía `requireSupabaseAuth`); e2e verificado en modo mock sin Google

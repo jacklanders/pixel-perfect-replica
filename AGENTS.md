@@ -51,7 +51,8 @@ UN solo lugar server-side para que la UI y el corte real del envío coincidan:
 - [ ] Admin: server fn `establecerLimiteDiarioUsuario` (upsert, admin-only).
 - [ ] Admin: merge del límite efectivo/override en `getAdminDashboard` +
       `usuariosRecientes` con `limiteDiario` editable.
-- [ ] SQL 0012 → aplicarlo en el Cloud (SQL Editor, como el 0004).
+- [x] SQL 0012 → aplicarlo en el Cloud (SQL Editor, como el 0004). Hecho 18/09 junto con 0013, 0014
+      y 0004 sección 3 (`Success. No rows returned`).
 - [ ] build + lint + tsc + tests + commit de la feature completa + push.
 - [ ] Deploy a Cloudflare Workers.
 
