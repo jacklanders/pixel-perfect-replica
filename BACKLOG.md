@@ -319,9 +319,11 @@ según el tipo de vacante ("Mejoras evaluadas para después del MVP").
 Freeze de features: no agregar features grandes; certificar que lo existente funciona de punta a
 punta. Registrado a partir del reporte de estado del 18/09 (etapa = certificación, no construcción).
 
-- [ ] 🔴 **Smoke real Hito 1** — login con Google real contra producción
+- [x] 🔴 **Smoke real Hito 1** — login con Google real contra producción
       (`https://app.postulaya-jack.workers.dev`): login → `/perfil` → refresh (sesión viva) →
       editar perfil → guardar → refresh → datos persisten. Anotar cada bug (S1).
+      → **Cerrado 18/09**: login Google real OK, refresh mantiene sesión, perfil guardado
+      persiste tras refresh. Sin bugs.
 - [ ] 🔴 **Smoke vertical completo del MVP** — login → perfil → crear CV → guardar → Mis CV →
       nuevo aviso → IA extrae → generar postulación → detalle → copiar → conectar Gmail → enviar →
       "Enviada". Probar 2ª/3ª operación y el **límite diario** (el sistema de límites cambió 18/09).
