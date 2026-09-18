@@ -102,8 +102,13 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
       `supabase/migrations/0001` a `0003` — verificado 06/09: NO coincidía (Lovable Cloud nunca creó
       `oauth_connection_status` y su `oauth_connections` difiere de 0001/0007). Código alineado al schema
       real + `0011_reconcile_oauth_live_schema.sql` para DBs frescas (commit 6afdbae).
-- [ ] Unificar el alta de perfil: hoy hay trigger (`0002`) + insert de fallback en `getMiPerfil` — no es
+- [x] Unificar el alta de perfil: hoy hay trigger (`0002`) + insert de fallback en `getMiPerfil` — no es
       grave pero es redundante.
+      → **Cerrado 18/09**: el trigger `handle_new_user` ya NO inserta en `profiles` (solo siembra el rol
+      `user` en `user_roles`); el alta de la fila es responsabilidad única de `getMiPerfil`
+      (`0013_unify_profile_creation.sql`). El fallback es imprescindible (cubre MOCK_AUTH, donde no hay
+      fila en auth.users y el trigger nunca dispara). Pendiente operativo: aplicar `0013` en el Cloud
+      (cierra de paso el fix de handle_new_user del ítem 11).
 - [ ] Decidir si `profiles.skills` (columna de `0002`) se usa de verdad o se elimina — `avatar_url`
       ya está en uso (avatares, 18/09). `skills` sigue guardándose en `preferencias` jsonb, pero la
       columna `profiles.skills` se lee vía `src/lib/server/profile.ts` para el CV que adjunta el mail.
@@ -141,6 +146,8 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
       `juliocesarvelozo@gmail.com` (UUID `9b2c3c26-1a4e-4055-8041-d82763027c47`) con insert vía `service_role`.
       Pendiente conexo: aplicar el resto de `0004_reconcile_live_schema.sql` al Cloud (fix de `handle_new_user`
       y limpieza de `oauth_connections`) para alinear el schema real con el repo.
+      → Parcialmente cubierto 18/09: el fix de `handle_new_user` queda resuelto por `0013_unify_profile_creation.sql`
+      (aplicar en el SQL Editor). Resta solo la sección 3 de 0004: revoke de `oauth_connections` a anon/authenticated.
 
 ## Mejoras evaluadas para después del MVP
 
@@ -269,7 +276,9 @@ completo en las secciones de arriba; esta lista los resume y prioriza.
    editable a mano (Hito 1). → **CERRADO 18/09**: editable con fallback a `firmaSugerida` y botón
    "Restaurar firma sugerida" (ver "Pendientes Hito 1").
 8. **Unificar el alta de perfil** — trigger (`0002`) + insert de fallback en `getMiPerfil` son
-   redundantes (fix del 18/08).
+   redundantes (fix del 18/08). → **CERRADO 18/09 (código)**: `0013_unify_profile_creation.sql` deja el
+   trigger solo para `user_roles`; el alta de `profiles` queda en `getMiPerfil` (único creador).
+   Pendiente operativo: aplicar `0013` en el SQL Editor del Cloud.
 9. **`profiles.avatar_url` / `profiles.skills`** — decidir si se usan o se eliminan (hoy todo va a
    `preferencias` jsonb) — `avatar_url` ya se usa; sigue pendiente la decisión de `skills`.
 10. **`bun run test:e2e` de login sin mockear Supabase Auth** — agrega un mock de auth para no

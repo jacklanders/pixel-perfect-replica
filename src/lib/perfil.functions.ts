@@ -15,6 +15,11 @@ function extDesdeMime(mime: string): string {
   return "png";
 }
 
+// Único punto de alta de `profiles` de la app: lee la fila y, si no existe, la
+// crea. El trigger handle_new_user (migración 0002/0004/0013) ya NO inserta
+// profiles — solo siembra el rol 'user' en user_roles —, así este insert es el
+// único creador (MUY importante en MOCK_AUTH, donde no hay fila en auth.users
+// y el trigger nunca dispara, y para usuarios legacy sin fila).
 export const getMiPerfil = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -37,6 +42,9 @@ export const getMiPerfil = createServerFn({ method: "GET" })
           context.email?.split("@")[0] ||
           "",
         email: context.email || "",
+        // Graba la foto de Google desde el metadata de OAuth (equivale al alta
+        // del trigger 0002, que antes poblaba avatar_url; ahora vive acá).
+        avatar_url: (meta?.["avatar_url"] as string) || (meta?.["picture"] as string) || null,
         telefono: "",
         ubicacion: "",
         rubro_objetivo: "",
