@@ -337,3 +337,14 @@ punta. Registrado a partir del reporte de estado del 18/09 (etapa = certificaci�
 - [ ] 🟡 **Decidir Vercel** (solo decidir, no necesariamente migrar) — si el dolor es solo el dominio
       largo, un dominio custom en Cloudflare Workers lo resuelve sin cambiar infra.
 - [ ] Luego de S1–S5: **declarar estado del Hito 5 / cierre del MVP**.
+
+### Bugs encontrados en la certificación
+- [x] 🔴 **S2 — el adjunto del CV de Jack no viajaba en el mail.** `obtenerCvAttachment`
+      (`gmail-send.ts`) usaba el embed `profiles(...)` sobre `resumes`, que FALLA en el schema
+      real por no existir FK `resumes → profiles` (PostgREST: *"Could not find a relationship"*)
+      y devolvía `null` en silencio → el mail salía sin CV. Solo el modo "Subir archivo"
+      adjuntaba. Los tests no lo vieron porque el fake no replica la resolución de relaciones.
+      → **Fix 18/09**: el perfil se lee como tabla aparte (2º query `profiles` por `user_id`);
+      verificado contra Cloud: PDF real generado (4595 bytes, `%PDF-`). Tests: MIME con
+      adjunto en ambos modos + assert de regresión (sin embed). Commit `fix-gmail-cv-attachment`
+      pendiente de deploy.

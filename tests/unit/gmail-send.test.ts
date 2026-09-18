@@ -25,14 +25,18 @@ const RESUMEN_GENERADO = {
       experiencia: [],
     },
   },
-  profiles: {
-    user_id: "user-1",
-    nombre: "Juan Pérez",
-    email: "juan@test.com",
-    ubicacion: "CABA",
-    telefono: "11-5555",
-    skills: ["TypeScript"],
-  },
+};
+
+// El schema real NO tiene FK resumes→profiles: PostgREST falla en el embed
+// `profiles(...)`, así que el perfil se lee como tabla aparte (mismo query que
+// el de producción en obtenerCvAttachment).
+const FILA_PERFIL = {
+  user_id: "user-1",
+  nombre: "Juan Pérez",
+  email: "juan@test.com",
+  ubicacion: "CABA",
+  telefono: "11-5555",
+  skills: ["TypeScript"],
 };
 
 const RESUMEN_SUBIDO = {
@@ -42,7 +46,6 @@ const RESUMEN_SUBIDO = {
   source_type: "uploaded_pdf",
   file_path_original: "/user-1/mi-cv.pdf",
   structured_json: null,
-  profiles: null,
 };
 
 describe("enviarPostulacionGmail", () => {
@@ -56,6 +59,9 @@ describe("enviarPostulacionGmail", () => {
 
     // Límite por defecto (10MB).
     client.handlers["app_settings"] = () => rowResult({ value: "10" });
+
+    // Perfil real (query aparte, sin embed resumes→profiles).
+    client.handlers["profiles"] = () => rowResult(FILA_PERFIL);
 
     // Token vigente (no expira, no toca la red).
     const accessEnc = await encrypt("access-valid");
@@ -124,6 +130,12 @@ describe("enviarPostulacionGmail", () => {
     expect(mime).toContain("Content-Type: multipart/mixed");
     expect(mime).toContain('Content-Disposition: attachment; filename="CV Desarrollador.pdf"');
     expect(mime).toContain("Content-Type: application/pdf");
+
+    // El perfil se lee como tabla aparte (regresión: el embed resumes→profiles
+    // falla en el schema real porque no hay FK).
+    const resumeCall = client.calls.find((c) => c.table === "resumes");
+    expect(resumeCall?.joinedSelect).toBe("*");
+    expect(client.calls.some((c) => c.table === "profiles")).toBe(true);
   });
 
   it("envía un CV subido como archivo (uploaded_pdf) descargándolo de Storage", async () => {

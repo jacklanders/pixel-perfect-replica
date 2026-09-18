@@ -201,10 +201,12 @@ async function obtenerCvAttachment(
 ): Promise<{ filename: string; mimeType: string; bytes: Uint8Array } | null> {
   if (!resumeId) return null;
 
-  // 1. Leer resume
+  // 1. Leer resume. NO se usa el embed `profiles(...)`: el schema real no tiene
+  // FK resumes→profiles y PostgREST responde "Could not find a relationship",
+  // lo que anulaba el adjunto en silencio. El perfil se lee en un 2º query.
   const { data: resume, error } = await supabase
     .from("resumes")
-    .select("*, profiles(user_id, nombre, email, ubicacion, telefono, skills)")
+    .select("*")
     .eq("id", resumeId)
     .eq("user_id", userId)
     .single();
@@ -236,7 +238,12 @@ async function obtenerCvAttachment(
   }
 
   // 3. Si es CV generado por Jack, generar PDF on-the-fly
-  const perfil = resume.profiles as unknown as Perfil | null;
+  const { data: rowPerfil } = await supabase
+    .from("profiles")
+    .select("nombre, email, ubicacion, telefono, skills")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const perfil = (rowPerfil ?? null) as Perfil | null;
   const cvData = resume.structured_json as unknown as Cv | null;
   if (!cvData) return null;
 
