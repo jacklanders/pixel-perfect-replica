@@ -109,10 +109,13 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
       (`0013_unify_profile_creation.sql`). El fallback es imprescindible (cubre MOCK_AUTH, donde no hay
       fila en auth.users y el trigger nunca dispara). Pendiente operativo: aplicar `0013` en el Cloud
       (cierra de paso el fix de handle_new_user del ítem 11).
-- [ ] Decidir si `profiles.skills` (columna de `0002`) se usa de verdad o se elimina — `avatar_url`
-      ya está en uso (avatares, 18/09). `skills` sigue guardándose en `preferencias` jsonb, pero la
-      columna `profiles.skills` se lee vía `src/lib/server/profile.ts` para el CV que adjunta el mail.
-      Queda decidir: mantener como espejo o migrar/eliminar.
+- [x] Decidir si `profiles.skills` (columna de `0002`) se usa de verdad o se elimina — `avatar_url`
+      ya estaba en uso (avatares, 18/09).
+      → **Cerrado 18/09**: se usa de verdad. Decisión: `skills` y `resumen` pasan a columnas reales
+      (fuente única), el jsonb `preferencias` deja de almacenarlos. Incluye el fix de un bug latente:
+      el save del `/perfil` DESCARTABA skills/resumen (zod los removía del payload). Migración
+      `0014_profile_skills_resumen_columns.sql` (backfill desde preferencias). Pendiente operativo:
+      aplicar `0014` en el Cloud.
 - [x] `login.tsx` no implementaba el `redirect` de vuelta que ahora manda `_authenticated/route.tsx`
       (`search: { redirect: location.href }`) — ignoraba el parámetro y siempre mandaba a `/perfil`.
       → **Cerrado 18/09**: el flujo completo ya está cableado — el guard redirige a `/login?redirect=`,
@@ -281,6 +284,10 @@ completo en las secciones de arriba; esta lista los resume y prioriza.
    Pendiente operativo: aplicar `0013` en el SQL Editor del Cloud.
 9. **`profiles.avatar_url` / `profiles.skills`** — decidir si se usan o se eliminan (hoy todo va a
    `preferencias` jsonb) — `avatar_url` ya se usa; sigue pendiente la decisión de `skills`.
+   → **CERRADO 18/09**: `skills` (y `resumen`) pasan a columnas reales con backfill
+   (`0014_profile_skills_resumen_columns.sql`); de paso se arregló que el save del `/perfil`
+   descartara ambos campos. `src/lib/server/profile.ts` (getMyProfile/updateMyProfile) — dead code —
+   se eliminó. Pendiente operativo: aplicar `0014` en el Cloud.
 10. **`bun run test:e2e` de login sin mockear Supabase Auth** — agrega un mock de auth para no
     depender de Google real en CI (Hito 1).
 11. **`e2e/auth.setup.ts` es dead code** — borrar o cablear el setup de auth en `projects` (CI,

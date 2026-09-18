@@ -49,7 +49,6 @@ export const getMiPerfil = createServerFn({ method: "GET" })
         ubicacion: "",
         rubro_objetivo: "",
         firma_mail: "",
-        preferencias: {},
       };
 
       const { data: inserted, error: insertError } = await supabase
@@ -80,7 +79,8 @@ const guardarPerfilSchema = z
     ubicacion: z.string().optional(),
     rubroObjetivo: z.string().optional(),
     firmaMail: z.string().optional(),
-    preferencias: z.record(z.unknown()).optional(),
+    skills: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
+    resumen: z.string().trim().max(2000).optional(),
   })
   .partial();
 
@@ -96,7 +96,8 @@ export const guardarPerfil = createServerFn({ method: "POST" })
     if (data.ubicacion !== undefined) updateData["ubicacion"] = data.ubicacion;
     if (data.rubroObjetivo !== undefined) updateData["rubro_objetivo"] = data.rubroObjetivo;
     if (data.firmaMail !== undefined) updateData["firma_mail"] = data.firmaMail;
-    if (data.preferencias !== undefined) updateData["preferencias"] = data.preferencias;
+    if (data.skills !== undefined) updateData["skills"] = data.skills;
+    if (data.resumen !== undefined) updateData["resumen"] = data.resumen;
 
     const { data: updated, error } = await supabase
       .from("profiles")

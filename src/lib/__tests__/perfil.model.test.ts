@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { PERFIL_VACIO, completitudPerfil, firmaSugerida, type Perfil } from "../perfil.model";
+import {
+  PERFIL_VACIO,
+  completitudPerfil,
+  filaAPerfil,
+  firmaSugerida,
+  type Perfil,
+} from "../perfil.model";
 
 describe("perfil.model", () => {
   it("calcula progreso 0% para perfil vacío", () => {
@@ -36,5 +42,25 @@ describe("perfil.model", () => {
 
   it("firma sugerida devuelve cadena vacía cuando faltan todos los datos", () => {
     expect(firmaSugerida(PERFIL_VACIO)).toBe("");
+  });
+
+  it("filaAPerfil lee skills y resumen desde las columnas reales (0014)", () => {
+    const perfil = filaAPerfil({
+      email: "juan@ejemplo.com",
+      nombre: "Juan Pérez",
+      skills: ["React", "Node.js"],
+      resumen: "Más de 5 años de experiencia.",
+      telefono: null,
+      avatar_url: null,
+    });
+    expect(perfil.skills).toEqual(["React", "Node.js"]);
+    expect(perfil.resumen).toBe("Más de 5 años de experiencia.");
+    expect(perfil.telefono).toBe("");
+  });
+
+  it("filaAPerfil tolera fila sin skills ni resumen (null/columnas vacías)", () => {
+    const perfil = filaAPerfil({ email: "a@b.com", nombre: "Ana", skills: null, resumen: null });
+    expect(perfil.skills).toEqual([]);
+    expect(perfil.resumen).toBe("");
   });
 });

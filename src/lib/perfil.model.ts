@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { Json } from "@/lib/supabase/types";
 
 export const perfilSchema = z.object({
   nombre: z.string().max(120).default(""),
@@ -30,10 +29,13 @@ export const PERFIL_VACIO: Perfil = {
   avatarUrl: null,
 };
 
-/** Mapea una fila de `profiles` (incluyendo `preferencias` jsonb) al modelo de UI. */
+/** Mapea una fila de `profiles` al modelo de UI. skills y resumen viven en
+ * columnas reales (migración 0014); `preferencias` jsonb ya no los almacena. */
 export function filaAPerfil(fila: Record<string, unknown>): Perfil {
-  const prefs = (fila["preferencias"] ?? {}) as Record<string, Json>;
-  const skills = Array.isArray(prefs["skills"]) ? (prefs["skills"] as Json[]) : [];
+  const skillsRaw = fila["skills"];
+  const skills = Array.isArray(skillsRaw)
+    ? (skillsRaw as unknown[]).filter((s): s is string => typeof s === "string")
+    : [];
 
   return {
     email: (fila["email"] as string | null) ?? "",
@@ -42,8 +44,8 @@ export function filaAPerfil(fila: Record<string, unknown>): Perfil {
     ubicacion: (fila["ubicacion"] as string | null) ?? "",
     rubroObjetivo: (fila["rubro_objetivo"] as string | null) ?? "",
     firmaMail: (fila["firma_mail"] as string | null) ?? "",
-    resumen: typeof prefs["resumen"] === "string" ? prefs["resumen"] : "",
-    skills: skills.filter((s): s is string => typeof s === "string"),
+    resumen: (fila["resumen"] as string | null) ?? "",
+    skills,
     avatarUrl: (fila["avatar_url"] as string | null) ?? null,
   };
 }
