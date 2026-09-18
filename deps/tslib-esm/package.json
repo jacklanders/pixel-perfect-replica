@@ -1,0 +1,19 @@
+﻿{
+  "name": "tslib",
+  "version": "1.14.1",
+  "description": "tslib 1.14.1 ESM puro (named exports) para workerd. Reemplaza la copia UMD/CJS que pdf-lib/docx/pdfjs-dist importan con named imports; rolldown entonces lo enlaza estatico y evita __toESM(...).default que workerd evalua a undefined.",
+  "license": "0BSD",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./index.mjs",
+  "module": "./index.mjs",
+  "exports": {
+    ".": {
+      "types": "./index.d.mts",
+      "import": "./index.mjs",
+      "default": "./index.mjs"
+    },
+    "./tslib.es6.js": "./index.mjs",
+    "./package.json": "./package.json"
+  }
+}

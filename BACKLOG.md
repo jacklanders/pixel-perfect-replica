@@ -348,3 +348,59 @@ punta. Registrado a partir del reporte de estado del 18/09 (etapa = certificaci�
       verificado contra Cloud: PDF real generado (4595 bytes, `%PDF-`). Tests: MIME con
       adjunto en ambos modos + assert de regresión (sin embed). Commit `fix-gmail-cv-attachment`
       pendiente de deploy.
+
+--------------------------------------------------------------------------------
+## RETOMAR: adjunto CV de Jack (pdf-lib) no viaja — crash de tslib en workerd (WIP 18/09, SIN commitear)
+--------------------------------------------------------------------------------
+Estado del árbol AHORA: M package.json, M bun.lock, ?? deps/  (sin commit, sin push).
+
+### Problema (producción)
+"Enviar desde Gmail" con el CV **generado por pdf-lib** (modo "Usar mi CV de Jack" cuando NO hay
+archivo subido / el CV se regenera) cae en el Worker: Cannot destructure property '__extends' of
+'__toESM(...).default' as it is undefined. El adjunto no llega ni el mail se envía. En local
+(Bun/Node) NO se reproduce: es específico de workerd.
+
+### Causa raíz (diagnóstico completo 18/09)
+- pdf-lib (dependencia de la app) importa tslib con **named imports** (import { __extends } from "tslib")
+  y tslib 1.14.1 es **UMD/CJS**. Bun instala el UMD y pdfjs-dist también lo usa.
+- rolldown (build Nitro/Workers) emite const { __extends } = __toESM(__commonJSMin(require_tslib())).default
+  para ese named import de un CJS. En workerd __toESM(...).default evalúa undefined → crash.
+- No es error de la app ni del query (eso ya estaba resuelto: el perfil se lee aparte, el PDF real
+  se genera, 4595 bytes). Es 100% interop bundler CJS→ESM en el bundle server.
+
+### Solución implementada (determinística, ya cableada)
+1. deps/tslib-esm/index.mjs — copia local del tslib 1.14.1 **ESM puro** (tslib.es6.js: 23 helpers,
+   named exports reales, sin UMD ni .default). Verificado: 23 exports, 0 markers UMD.
+2. deps/tslib-esm/package.json — paquete local 	slib@1.14.1 (file:-able, exports → index.mjs).
+3. package.json raíz — "tslib": "file:./deps/tslib-esm" en dependencies + "overrides": { "tslib": "" }
+   que fuerza a **TODO** el árbol (incl. pdf-lib transitivo) a resolver tslib contra el shim ESM.
+4. un install OK → 
+ode_modules/tslib ahora es el shim (package name=tslib, main=./index.mjs).
+
+### Verificación parcial (18/09)
+- un run build ✅.
+- En chunk .output/server/_libs/pdf-lib+tslib.mjs: **ya NO aparece** __toESM(__commonJSMin(require_tslib())).default.
+  El tslib se enlaza como named export estático ahora (huella equire_pako() sigue; pako es otro helper,
+  ver "queda pendiente").
+- Sin otros __toESM(X).default en _libs de pdf-lib+tslib.
+
+### Queda pendiente (para finalizar esta tarea)
+- [ ] Verificar que la interop no rompió en otros chunks server que también usan tslib/docx/pdfjs-dist
+      (docx, pdfjs-dist): grep __toESM(...).default / equire_tslib en .output/server/_libs/*.mjs
+      → debe ser 0 en pdf-lib+tslib (mayor riesgo ya limpio). Revisar también chunk pako (pdf-lib usa
+      pako → confirmar named export directo equire_pako().deflateSync y no .default).
+- [ ] Correr la suite completa (regla AGENTS: no commitear sin verde): un run typecheck, un run lint,
+      un test, un run build.
+- [ ] Re-test real del flujo en **workerd** (el único que reprodujo): deploy a Cloudflare Workers
+      (unx nitro deploy --prebuilt) + websearch/curl smoke del envío con CV pdf-lib.
+- [ ] Commit + push cuando todo verde (mensaje sugerido: ix(gmail-send): shim ESM puro de tslib para
+      pdf-lib — estructura UMD/CJS rompía interop en workerd (CV de Jack no viajaba en el mail)).
+- [ ] Confirmación del usuario: "Enviar desde Gmail" con CV de Jack (sin archivo subido) llega con el
+      PDF adjunto.
+
+### Notas de contexto
+- El fix de 18/09 del adjunto gmail (gmail-send.ts perfil aparte) **ya está en prod** y funcionó para
+  el modo "Subir archivo"; esto ata el modo pdf-lib (sin subida) que quedaba roto por bundling.
+- No borrar deps/tslib-esm/ ni el overrides hasta cerrar: es la pieza que hace el named-import
+  estático. Alternativa a largo plazo (si Bun cambia interop): publicar 	slib ESM propio o migrar.
+- GO check del usuario: probar el envío con el CV de Jack (sin subir archivo) contra producción.
