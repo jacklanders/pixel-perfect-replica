@@ -127,9 +127,14 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
 
 - [ ] Smoke test real: login con Google local (Docker) end-to-end, incluyendo refresh de página
       logueado. Es la parte no probada de este hito — ver nota en `src/lib/supabase/server.ts`.
-- [ ] `bun run test:e2e` de login sigue sin mockear Supabase Auth (no se agregó en este hito); el
-      smoke test de Playwright existente solo cubre la landing. Agregar un mock de auth antes de que
-      esto crezca, para no depender de Google real en CI.
+- [x] `bun run test:e2e` de login sin mockear Supabase Auth; el smoke de Playwright solo cubría la
+      landing. Agregar un mock de auth para no depender de Google real en CI.
+      → **Cerrado 18/09**: el mock de auth YA existe y cubre CI sin Google — `MOCK_AUTH=true`
+      (default del webServer en `playwright.config.ts`) hace que `requireSupabaseAuth` inyecte el
+      usuario determinístico `test@jack.local`. Verificado local: `bun run test:e2e` en modo mock =
+      5 passed / 7 skipped (los skips requieren Supabase local vía `.env.local`, no Google). El único
+      test real de Google (guard → `/login?redirect=`) es opt-in con `MOCK_AUTH=false`. Nota: el repo
+      no tiene workflows `.github/`; si se agrega CI, corre sin secretos en modo mock.
 - [x] Edición de avatar ("Cambiar foto") no estaba implementada — hoy solo mostraba el avatar de Google.
       → **Cerrado 18/09**: `subirAvatar`/`quitarAvatar` (`src/lib/perfil.functions.ts`) con bucket
       `avatars` (migraciones 0009/0010) y botones "Cambiar foto"/"Quitar" en `perfil.tsx`.
@@ -289,7 +294,9 @@ completo en las secciones de arriba; esta lista los resume y prioriza.
    descartara ambos campos. `src/lib/server/profile.ts` (getMyProfile/updateMyProfile) — dead code —
    se eliminó. Pendiente operativo: aplicar `0014` en el Cloud.
 10. **`bun run test:e2e` de login sin mockear Supabase Auth** — agrega un mock de auth para no
-    depender de Google real en CI (Hito 1).
+     depender de Google real en CI (Hito 1). → **CERRADO 18/09**: el mock de auth es `MOCK_AUTH=true`
+     (inyecta `test@jack.local` vía `requireSupabaseAuth`); e2e verificado en modo mock sin Google
+     (ver "Pendientes Hito 1").
 11. **`e2e/auth.setup.ts` es dead code** — borrar o cablear el setup de auth en `projects` (CI,
      cleanup opcional). → **CERRADO 18/09**: archivo eliminado; `testMatch: *.e2e.ts` nunca lo corría
      y el `storageState` no estaba cableado. El criterio de auth real queda en `MOCK_AUTH=false`.
