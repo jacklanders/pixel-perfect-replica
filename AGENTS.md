@@ -57,10 +57,14 @@ UN solo lugar server-side para que la UI y el corte real del envío coincidan:
 - [x] merge del límite efectivo/override en `getAdminDashboard` + `usuariosRecientes` editable (hecho 18/09).
 - [x] SQL 0012 → aplicarlo en el Cloud (SQL Editor, como el 0004). Hecho 18/09 junto con 0013, 0014
       y 0004 sección 3 (`Success. No rows returned`).
-- [ ] SQL 0015 (RPC del resolver) → aplicarlo en el Cloud vía SQL Editor ANTES del deploy.
-- [ ] build + lint + tsc + tests (✅ verificados 18/09: 74 tests / lint 0 errores / tsc / build).
-- [ ] commit de la feature completa + push.
-- [ ] deploy a Cloudflare Workers.
+- [x] SQL 0015 (RPC del resolver) → aplicado en el Cloud 18/09 (verified vía REST: admin → `{limite:10,rol:"admin",override:false}`).
+- [x] build + lint + tsc + tests (✅ 74 tests / lint 0 errores / tsc / build).
+- [x] commit de la feature completa + push (`52ba656`).
+- [x] deploy a Cloudflare Workers (`ccda9e15`, smoke home/login 200, perfil 307).
+
+## FEATURE CERRADA (18/09)
+Límites diarios configurables en producción. Próximos pasos del BACKLOG.md (manuales/decisión):
+item 13 smoke login Google con Docker, item 14 migración Vercel (decisión), item 12 multi-CV post-MVP.
 
 ## PLAN DE TRABAJO (orden de ejecución)
 1. Resolver `obtenerLimiteDiarioEfectivo` ✅ (RPC 0015 + `limite-diario.ts`, hecho 18/09)
