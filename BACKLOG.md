@@ -104,12 +104,16 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
       real + `0011_reconcile_oauth_live_schema.sql` para DBs frescas (commit 6afdbae).
 - [ ] Unificar el alta de perfil: hoy hay trigger (`0002`) + insert de fallback en `getMiPerfil` — no es
       grave pero es redundante.
-- [ ] Decidir si `profiles.avatar_url`/`profiles.skills` (columnas de la migración `0002`) se usan de
-      verdad o se eliminan — hoy `perfil.model.ts` guarda todo en `preferencias` jsonb y esas columnas
-      quedaron sin usar.
-- [ ] `login.tsx` no implementa el `redirect` de vuelta que ahora manda `_authenticated/route.tsx`
-      (`search: { redirect: location.href }`) — hoy simplemente ignora ese parámetro y siempre manda a
-      `/perfil` después del login. No es un bug, pero es una mejora de UX pendiente.
+- [ ] Decidir si `profiles.skills` (columna de `0002`) se usa de verdad o se elimina — `avatar_url`
+      ya está en uso (avatares, 18/09). `skills` sigue guardándose en `preferencias` jsonb, pero la
+      columna `profiles.skills` se lee vía `src/lib/server/profile.ts` para el CV que adjunta el mail.
+      Queda decidir: mantener como espejo o migrar/eliminar.
+- [x] `login.tsx` no implementaba el `redirect` de vuelta que ahora manda `_authenticated/route.tsx`
+      (`search: { redirect: location.href }`) — ignoraba el parámetro y siempre mandaba a `/perfil`.
+      → **Cerrado 18/09**: el flujo completo ya está cableado — el guard redirige a `/login?redirect=`,
+      `login.tsx` valida (solo rutas internas) y reenvía el redirect al `/auth/callback`, y el callback
+      vuelve a la ruta de origen. Anti-open-redirect en ambos lados. `location.href` de TanStack es
+      relativo (sin origen), así la validación no lo descarta.
 
 ## Pendientes técnicos no bloqueantes (Hito 1)
 
@@ -118,16 +122,18 @@ código actual. Priorizados por severidad. Verificación de referencia: `bun run
 - [ ] `bun run test:e2e` de login sigue sin mockear Supabase Auth (no se agregó en este hito); el
       smoke test de Playwright existente solo cubre la landing. Agregar un mock de auth antes de que
       esto crezca, para no depender de Google real en CI.
-- [ ] Edición de avatar ("Cambiar foto") no está implementada — Hito 1 solo muestra el avatar de Google
-      si existe.
-- [ ] `firma_mail` hoy es un textarea libre; falta decidir si se autogenera a partir de los otros
-      campos (como sugiere el placeholder) o si queda 100% editable a mano.
+- [x] Edición de avatar ("Cambiar foto") no estaba implementada — hoy solo mostraba el avatar de Google.
+      → **Cerrado 18/09**: `subirAvatar`/`quitarAvatar` (`src/lib/perfil.functions.ts`) con bucket
+      `avatars` (migraciones 0009/0010) y botones "Cambiar foto"/"Quitar" en `perfil.tsx`.
+- [x] `firma_mail` era un textarea libre; faltaba decidir autogeneración vs editable.
+      → **Cerrado 18/09**: resuelto como editable con sugerencia — textarea que usa `firmaSugerida`
+      como fallback cuando está vacío y botón "Restaurar firma sugerida" (`perfil.tsx`).
 
 ## Pendientes técnicos no bloqueantes (Hito 0)
 
-- [ ] Generar assets de ícono PWA reales (192x192 y 512x512, maskable); hoy `manifest.webmanifest` apunta
-      al `favicon.ico` existente como placeholder — el navegador va a tirar un warning/404 leve en
-      consola hasta que se agreguen.
+- [x] Generar assets de ícono PWA reales (192x192 y 512x512, maskable) — faltaban los assets.
+      → **Cerrado 18/09**: `public/icon-192x192.png`, `icon-512x512.png` y `maskable-512x512.png`
+      existen y el manifest los referencia con `purpose: "maskable"`.
 - [x] Al sembrar el primer usuario admin, hacerlo con un insert directo en `user_roles` vía
       `service_role` (SQL en Supabase Studio o script server-side), nunca desde un endpoint expuesto al
       cliente. → **Cerrado 15/09**: `user_roles` NO existía en el Cloud real (0004 nunca aplicada);
@@ -174,9 +180,11 @@ ejecutar las specs: el collection se rompe durante la carga de `e2e/login.e2e.ts
       para dejar el job verde en CI.
       → Cerrado 06/09: webServer usa `process.env.MOCK_AUTH ?? "true"`; el test de sesión skipea
       salvo `MOCK_AUTH=false`. Verificado local: 4 smoke pasan, 7 flujos con DB skip (igual que CI).
-- [ ] **Cleanup menor (opcional): `e2e/auth.setup.ts` es dead code** — testMatch es `*.e2e.ts` y
-      `auth.setup.ts` no calza, así que nunca corre; el `storageState` (e2e/.auth/user.json) que
-      referencia no está cableado en `projects`. Borrar o cablear bien el setup de auth.
+- [x] **Cleanup menor (opcional): `e2e/auth.setup.ts` era dead code** — `testMatch` es `*.e2e.ts` y
+      `auth.setup.ts` no calza, así que nunca corría; el `storageState` (e2e/.auth/user.json) que
+      referencia no estaba cableado en `projects`.
+      → **Cerrado 18/09**: archivo eliminado. Para correr con auth real se usa `MOCK_AUTH=false`
+      (+ Supabase local); el mock determinístico queda como default del webServer.
 - [x] **Callback Gmail: error `connected_at` aún visible en browser (dato 06/09).** El código actual
       NO referencia `connected_at` (grep verificado; solo comentarios en `gmail-oauth.ts:241` y
       `types.ts:194`). La consola mostraba nombres de bundle hasheados (`auth.gmail-callback-*.js`,
@@ -252,20 +260,26 @@ completo en las secciones de arriba; esta lista los resume y prioriza.
    footer a "PostulaYa! JACK", logos movidos al pie en el mismo orden y logo de Lovable sumado a la
    fila de IAs (ver sección "UI — pendientes de interfaz").
 5. **`login.tsx` ignora el `redirect`** que manda `_authenticated/route.tsx` — siempre cae a
-   `/perfil` tras el login (mejora de UX, no bug).
+   `/perfil` tras el login (mejora de UX, no bug). → **CERRADO 18/09**: flujo redirect completo en el
+   guard → login → callback (ver sección "fix del 18/08").
 6. **Edición de avatar ("Cambiar foto")** no implementada — Hito 1 solo muestra el avatar de Google.
+   → **CERRADO 18/09**: `subirAvatar`/`quitarAvatar` + bucket `avatars` + botones en `perfil.tsx`
+   (ver "Pendientes Hito 1").
 7. **`firma_mail` textarea libre** — decidir si se autogenera desde los otros campos o queda 100%
-   editable a mano (Hito 1).
+   editable a mano (Hito 1). → **CERRADO 18/09**: editable con fallback a `firmaSugerida` y botón
+   "Restaurar firma sugerida" (ver "Pendientes Hito 1").
 8. **Unificar el alta de perfil** — trigger (`0002`) + insert de fallback en `getMiPerfil` son
    redundantes (fix del 18/08).
 9. **`profiles.avatar_url` / `profiles.skills`** — decidir si se usan o se eliminan (hoy todo va a
-   `preferencias` jsonb).
+   `preferencias` jsonb) — `avatar_url` ya se usa; sigue pendiente la decisión de `skills`.
 10. **`bun run test:e2e` de login sin mockear Supabase Auth** — agrega un mock de auth para no
     depender de Google real en CI (Hito 1).
 11. **`e2e/auth.setup.ts` es dead code** — borrar o cablear el setup de auth en `projects` (CI,
-    cleanup opcional).
+     cleanup opcional). → **CERRADO 18/09**: archivo eliminado; `testMatch: *.e2e.ts` nunca lo corría
+     y el `storageState` no estaba cableado. El criterio de auth real queda en `MOCK_AUTH=false`.
 12. **Assets de ícono PWA reales** (192x192 y 512x512, maskable) — hoy apunta a favicon como
-    placeholder (Hito 0).
+     placeholder (Hito 0). → **CERRADO 18/09**: los tres PNGs existen en `public/` y el manifest los
+     referencia (ver "Pendientes Hito 0").
 13. **Smoke test real: login con Google local (Docker) end-to-end**, incluyendo refresh de página
     logueado (ya estaba listado en "Pendientes Hito 1"; se consolida acá).
 14. **Evaluar migración de Cloudflare Workers → Vercel** — preset `vercel` de Nitro, env vars sin
