@@ -7,6 +7,7 @@
  */
 
 import { enviarPostulacionGmail, GmailEnvioAmbiguoError } from "@/lib/server/gmail-send";
+import { obtenerLimiteDiarioEfectivo } from "@/lib/server/limite-diario";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -53,15 +54,18 @@ export async function enviarEmailGmailCore(argv: {
     throw new Error("Esa postulación ya fue enviada");
   }
 
-  // 2. Verificar límite diario
+  // 2. Verificar límite diario (resuelto server-side: override > rol > fallback)
+  const { limite } = await obtenerLimiteDiarioEfectivo({ supabase, userId });
   const { data: limitResult, error: limitError } = await supabase.rpc("increment_daily_usage", {
-    p_limit: 2,
+    p_limit: limite,
   });
   if (limitError) throw new Error(limitError.message);
 
   const allowed = (limitResult as { allowed: boolean }[])[0]?.allowed ?? false;
   if (!allowed) {
-    throw new Error("Límite diario alcanzado. Podés generar hasta 2 postulaciones por día.");
+    throw new Error(
+      `Límite diario alcanzado. Podés generar hasta ${limite} postulaciones por día.`,
+    );
   }
 
   // A partir de acá la reserva quedó consumida (allowed=true). La cuota se

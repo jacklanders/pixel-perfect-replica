@@ -65,6 +65,9 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     };
     client.rpcHandler = async (fn) => {
       rpcNames.push(fn);
+      if (fn === "obtener_limite_diario_efectivo") {
+        return rowResult([{ limite: 2, rol: "user", override: false }]);
+      }
       return rowResult([{ allowed: true }]);
     };
 
@@ -186,7 +189,12 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
         refresh_token: null,
         expires_at: isoIn(60 * 60),
       });
-    client.rpcHandler = async () => rowResult([{ allowed: false }]);
+    client.rpcHandler = async (fn) => {
+      if (fn === "obtener_limite_diario_efectivo") {
+        return rowResult([{ limite: 2, rol: "user", override: false }]);
+      }
+      return rowResult([{ allowed: false }]);
+    };
     fetchStub.mockResolvedValue(fakeResponse(200, { id: "gmail-1" }));
 
     await expect(enviarEmailGmailCore(coreArgs(client))).rejects.toThrow("Límite diario alcanzado");
@@ -194,6 +202,55 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     const updateOp = client.calls.find((c) => c.op === "update" && c.table === "applications");
     expect(updateOp).toBeUndefined();
     expect(fetchStub).not.toHaveBeenCalled();
+  });
+
+  it("usa el límite efectivo del resolver como p_limit del corte", async () => {
+    const accessEnc = await oauth.encrypt("access-valid");
+    client.handlers["oauth_connections"] = () =>
+      rowResult({
+        encrypted_access_token: accessEnc,
+        refresh_token: null,
+        expires_at: isoIn(60 * 60),
+      });
+    fetchStub.mockResolvedValue(fakeResponse(200, { id: "gmail-eff" }));
+
+    let incrementArgs: Record<string, unknown> | null = null;
+    client.rpcHandler = async (fn, args) => {
+      if (fn === "obtener_limite_diario_efectivo") {
+        return rowResult([{ limite: 7, rol: "user", override: true }]);
+      }
+      if (fn === "increment_daily_usage") {
+        incrementArgs = args;
+      }
+      return rowResult([{ allowed: true }]);
+    };
+
+    const result = await enviarEmailGmailCore(coreArgs(client));
+
+    expect(result.status).toBe("sent");
+    expect(incrementArgs).toEqual({ p_limit: 7 });
+  });
+
+  it("el mensaje de límite alcanzado usa el límite efectivo del resolver", async () => {
+    const accessEnc = await oauth.encrypt("access-valid");
+    client.handlers["oauth_connections"] = () =>
+      rowResult({
+        encrypted_access_token: accessEnc,
+        refresh_token: null,
+        expires_at: isoIn(60 * 60),
+      });
+    fetchStub.mockResolvedValue(fakeResponse(200, { id: "gmail-eff" }));
+
+    client.rpcHandler = async (fn) => {
+      if (fn === "obtener_limite_diario_efectivo") {
+        return rowResult([{ limite: 7, rol: "user", override: true }]);
+      }
+      return rowResult([{ allowed: false }]);
+    };
+
+    await expect(enviarEmailGmailCore(coreArgs(client))).rejects.toThrow(
+      "hasta 7 postulaciones por día",
+    );
   });
 
   it("bloquea el reenvío de una postulación ya enviada (status sent) sin gastar cuota ni llamar a Gmail", async () => {

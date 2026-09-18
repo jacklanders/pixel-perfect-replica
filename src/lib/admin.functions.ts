@@ -21,6 +21,9 @@ export interface UsuarioAdmin {
   nombre: string | null;
   createdAt: string;
   cantidadCvs: number;
+  rol: "user" | "admin";
+  limiteDiario: number;
+  limiteOverride: boolean;
 }
 
 export interface DatosAdminDashboard {
@@ -46,6 +49,63 @@ export const getEsAdmin = createServerFn({ method: "GET" })
     });
     if (error || !data) return { esAdmin: false };
     return { esAdmin: true };
+  });
+
+const establecerLimiteDiarioSchema = z.object({
+  userId: z.string().uuid(),
+  // null elimina el override y vuelve al default del rol (app_settings).
+  dailyLimit: z.number().int().min(1).max(1000).nullable(),
+  motivo: z.string().max(200).optional(),
+});
+
+// Upsert/delete del override por usuario (admin-only). El default del rol no
+// toca: si no hay fila en user_application_limits, el resolver usar el de
+// app_settings → código.
+export const establecerLimiteDiarioUsuario = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireAdmin])
+  .validator(establecerLimiteDiarioSchema)
+  .handler(async ({ data, context }) => {
+    const service = getServiceClient();
+
+    if (data.dailyLimit === null) {
+      const { error } = await service
+        .from("user_application_limits")
+        .delete()
+        .eq("user_id", data.userId);
+      if (error) throw new Error(error.message);
+      logger.info("limite diario: override eliminado", {
+        userId: data.userId,
+        by: context.userId,
+      });
+      return { userId: data.userId, dailyLimit: null, override: false };
+    }
+
+    const { data: fila, error } = await service
+      .from("user_application_limits")
+      .upsert(
+        {
+          user_id: data.userId,
+          daily_limit: data.dailyLimit,
+          updated_by: context.userId,
+          updated_at: new Date().toISOString(),
+          motivo: data.motivo ?? null,
+        },
+        { onConflict: "user_id" },
+      )
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    logger.info("limite diario: override actualizado", {
+      userId: data.userId,
+      dailyLimit: data.dailyLimit,
+      by: context.userId,
+    });
+    return {
+      userId: data.userId,
+      dailyLimit: data.dailyLimit,
+      override: true,
+    };
   });
 
 export const getAdminDashboard = createServerFn({ method: "GET" })
@@ -114,6 +174,36 @@ export const getAdminDashboard = createServerFn({ method: "GET" })
       cvsPorUsuario.set(r.user_id, (cvsPorUsuario.get(r.user_id) ?? 0) + 1);
     }
 
+    // Límite diario efectivo de cada reciente, resuelto con la MISMA rpc que usa
+    // el corte del envío (obtener_limite_diario_efectivo, 0015): override por
+    // usuario > default por rol (app_settings) > fallback por código.
+    const recientes = (ultimas.data ?? []) as Array<{
+      user_id: string;
+      email: string;
+      nombre: string | null;
+      created_at: string;
+    }>;
+    const estadosLimite = await Promise.all(
+      recientes.map(async (u) => {
+        const { data, error } = await service.rpc("obtener_limite_diario_efectivo", {
+          p_user_id: u.user_id,
+        });
+        if (error) throw new Error(error.message);
+        const fila = (
+          data as Array<{ limite: number; rol: string; override: boolean }> | null
+        )?.[0];
+        return [
+          u.user_id,
+          {
+            limite: Number.isInteger(fila?.limite) ? (fila?.limite as number) : 2,
+            rol: (fila?.rol === "admin" ? "admin" : "user") as "user" | "admin",
+            override: fila?.override === true,
+          },
+        ] as const;
+      }),
+    );
+    const limitePorUsuario = new Map(estadosLimite);
+
     return {
       totalUsuarios: usuarios.count ?? 0,
       totalCvs: cvs.count ?? 0,
@@ -122,13 +212,23 @@ export const getAdminDashboard = createServerFn({ method: "GET" })
       totalVacantes: vacantes.count ?? 0,
       gmailConectados: gmail.count ?? 0,
       usoIAUltimos14Dias: [...porFecha.values()].sort((a, b) => a.fecha.localeCompare(b.fecha)),
-      usuariosRecientes: (ultimas.data ?? []).map((u) => ({
-        userId: u["user_id"] as string,
-        email: u["email"] as string,
-        nombre: u["nombre"] as string | null,
-        createdAt: u["created_at"] as string,
-        cantidadCvs: cvsPorUsuario.get(u["user_id"] as string) ?? 0,
-      })),
+      usuariosRecientes: recientes.map((u) => {
+        const estado = limitePorUsuario.get(u.user_id) ?? {
+          limite: 2,
+          rol: "user" as const,
+          override: false,
+        };
+        return {
+          userId: u.user_id,
+          email: u.email,
+          nombre: u.nombre,
+          createdAt: u.created_at,
+          cantidadCvs: cvsPorUsuario.get(u.user_id) ?? 0,
+          rol: estado.rol,
+          limiteDiario: estado.limite,
+          limiteOverride: estado.override,
+        };
+      }),
       appSettings: (settings.data ?? []) as AppSettingRow[],
     };
   });

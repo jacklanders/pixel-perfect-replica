@@ -134,6 +134,11 @@ export const getUsoDiario = createServerFn({ method: "GET" })
 
     if (error) throw new Error(error.message);
 
+    const { limite, rol, override } = await obtenerLimiteDiarioEfectivo({
+      supabase: context.supabase,
+      userId: context.userId,
+    });
+
     // El límite se renueva a la medianoche del día siguiente (hora local).
     const ahora = new Date();
     const manana = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() + 1);
@@ -141,8 +146,10 @@ export const getUsoDiario = createServerFn({ method: "GET" })
 
     return {
       used_today: used,
-      remaining_today: Math.max(0, 2 - used),
-      limit: 2,
+      remaining_today: Math.max(0, limite - used),
+      limit: limite,
+      rol,
+      override,
       reset_at: manana.toISOString(),
     };
   });
@@ -153,6 +160,7 @@ import {
   type EnviarEmailGmailInput,
 } from "@/lib/server/enviar-postulacion-email";
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit";
+import { obtenerLimiteDiarioEfectivo } from "@/lib/server/limite-diario";
 
 // Rate limit anti-spam por IP en el envío real de correos.
 const EMAIL_SEND_RATE_LIMIT = { limit: 5, windowMs: 60_000 };

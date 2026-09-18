@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Loader2, RefreshCw, Save, ShieldCheck } from "lucide-react";
+import { Loader2, RefreshCw, RotateCcw, Save, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/AppShell";
@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   getAdminDashboard,
   actualizarAppSetting,
+  establecerLimiteDiarioUsuario,
   type DiaUsoIA,
   type DatosAdminDashboard,
 } from "@/lib/admin.functions";
@@ -171,30 +172,108 @@ function UsoIaChart({ uso }: { uso: DiaUsoIA[] }) {
 }
 
 function UsuariosRecientes({ usuarios }: { usuarios: DatosAdminDashboard["usuariosRecientes"] }) {
+  const queryClient = useQueryClient();
+  const guardarLimite = useServerFn(establecerLimiteDiarioUsuario);
+  const [borradores, setBorradores] = useState<Record<string, string>>({});
+
+  const mutation = useMutation({
+    mutationFn: ({ userId, dailyLimit }: { userId: string; dailyLimit: number | null }) =>
+      guardarLimite({ data: { userId, dailyLimit, motivo: "Ajuste manual desde el panel" } }),
+    onSuccess: (_data, variables) => {
+      setBorradores((prev) => {
+        const next = { ...prev };
+        delete next[variables.userId];
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: adminQueryKey });
+      toast.success("Límite diario actualizado");
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "No se pudo actualizar el límite"),
+  });
+
   return (
     <Card className="shadow-soft">
       <CardHeader>
         <CardTitle className="text-base">Usuarios recientes</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Límite diario de postulaciones editable por usuario (override sobre el default del rol).
+        </p>
       </CardHeader>
       <CardContent>
         {usuarios.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">Sin usuarios todavía.</p>
         ) : (
           <ul className="divide-y divide-border">
-            {usuarios.map((u) => (
-              <li key={u.userId} className="flex items-center justify-between gap-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{u.nombre || u.email}</p>
-                  <p className="truncate text-xs text-muted-foreground">{u.email}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge variant="secondary">{u.cantidadCvs} CVs</Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(u.createdAt).toLocaleDateString("es-AR")}
-                  </span>
-                </div>
-              </li>
-            ))}
+            {usuarios.map((u) => {
+              const valor = borradores[u.userId] ?? String(u.limiteDiario);
+              const pendiente = mutation.isPending && mutation.variables?.userId === u.userId;
+              const numero = Number.parseInt(valor, 10);
+              const valido = Number.isInteger(numero) && numero >= 1 && numero <= 1000;
+              return (
+                <li key={u.userId} className="py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{u.nombre || u.email}</p>
+                      <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Badge variant={u.rol === "admin" ? "default" : "secondary"}>{u.rol}</Badge>
+                      <Badge variant="secondary">{u.cantidadCvs} CVs</Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(u.createdAt).toLocaleDateString("es-AR")}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Label htmlFor={`limite-${u.userId}`} className="text-xs text-muted-foreground">
+                      Límite diario
+                    </Label>
+                    <Input
+                      id={`limite-${u.userId}`}
+                      type="number"
+                      min={1}
+                      max={1000}
+                      className="h-8 w-20"
+                      value={valor}
+                      onChange={(e) =>
+                        setBorradores((prev) => ({ ...prev, [u.userId]: e.target.value }))
+                      }
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-8"
+                      title="Guardar límite"
+                      disabled={!valido || pendiente}
+                      onClick={() => mutation.mutate({ userId: u.userId, dailyLimit: numero })}
+                    >
+                      {pendiente ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Save className="size-4" />
+                      )}
+                    </Button>
+                    {u.limiteOverride ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        title="Quitar override y volver al default del rol"
+                        disabled={pendiente}
+                        onClick={() => mutation.mutate({ userId: u.userId, dailyLimit: null })}
+                      >
+                        <RotateCcw className="mr-1.5 size-3.5" />
+                        Default
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">default del rol</span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </CardContent>
