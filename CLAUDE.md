@@ -11,6 +11,10 @@ Memoria operativa corta. El prompt de producto completo vive en `README.md` y en
 - **Runtime:** `bun` (no npm). `bun install`, `bun run dev` (puerto 8080).
 - **Hosting:** Cloudflare Workers vía Nitro (preset del scaffold). Deploy:
   `bun run build` → `npx wrangler login` → `npx nitro deploy --prebuilt`.
+  **Auto-deploy en CI** (`.github/workflows/ci.yml` job `deploy`): al pushear a `main`
+  con los secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_ANON_KEY` definidos en el repo. Sin token no hace falta deploy manual
+  (los secrets del worker se mantienen entre deploys).
 - **Backend:** Supabase (Auth + Postgres + Storage). La lógica server (IA, OAuth Gmail,
   envío de mail) va en `createServerFn`/rutas API de TanStack, **no** en Edge Functions.
 - **Supabase — decisión (15/09/2026): Cloud es la fuente de verdad.** El proyecto real es
