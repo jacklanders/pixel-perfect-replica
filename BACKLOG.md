@@ -344,10 +344,22 @@ punta. Registrado a partir del reporte de estado del 18/09 (etapa = certificaci�
       real por no existir FK `resumes → profiles` (PostgREST: *"Could not find a relationship"*)
       y devolvía `null` en silencio → el mail salía sin CV. Solo el modo "Subir archivo"
       adjuntaba. Los tests no lo vieron porque el fake no replica la resolución de relaciones.
-      → **Fix 18/09**: el perfil se lee como tabla aparte (2º query `profiles` por `user_id`);
+→ **Fix 18/09**: el perfil se lee como tabla aparte (2º query `profiles` por `user_id`);
       verificado contra Cloud: PDF real generado (4595 bytes, `%PDF-`). Tests: MIME con
       adjunto en ambos modos + assert de regresión (sin embed). Commit `fix-gmail-cv-attachment`
       pendiente de deploy.
+- [x] 🔴 **S2 — el cuerpo del mail quedaba vacío a veces.** Cuando Jack (la IA) no devolvía
+      un cuerpo (proveedor caído, JSON incompleto o `"cuerpo": ""`), la postulación quedaba
+      con `generated_body` vacío: el schema aceptaba `""`, el insert nacía con `""` y los
+      guards `if (cuerpo)` nunca lo reparaban (además el update no chequeaba error).
+      Reportado por el usuario contra producción 19/09 (postulación `f196f3da-…`).
+      → **Fix 19/09**: fallback determinístico `generarCuerpoDesdeCv`
+      (`src/lib/ai/cuerpo-postulacion.ts`) que arma el cuerpo con la info REAL del
+      CV/perfil (puesto+empresa, resumen, experiencia con fechas, habilidades,
+      disponibilidad, firma): nunca vacío, nada inventado. Aplica en la creación
+      (catch de la IA) y en la regeneración desde el detalle; el prompt ahora exige
+      cuerpo no vacío y el update loguea el error. Commit `35370c9`, deploy
+      `42c609ec`. +7 tests (81 en total).
 
 --------------------------------------------------------------------------------
 ## CERRADO 19/09: adjunto CV de Jack (pdf-lib) no viaja — crash de tslib en workerd
