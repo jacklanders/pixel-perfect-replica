@@ -44,6 +44,47 @@ function stripBase64Header(base64: string): string {
   return base64.replace(/^data:[^;,]+;base64,/, "");
 }
 
+// ─── Reintentos ante errores transitorios del proveedor ───
+// Los 429/5xx de Gemini/Anthropic suelen ser picos de demanda momentáneos.
+// Reintentar con un backoff corto evita que una ráfaga de tráfico tumbar al
+// usuario con "Jack está con mucha demanda". Solo se reintenta cuando el
+// proveedor respondió con un status transitorio (429/5xx) o hubo error de red;
+// nunca se reintenta en otros status (400/401/403/404) porque son definitivos.
+const STATUS_TRANSITORIO = new Set([408, 429, 500, 502, 503, 504, 529]);
+const RETRASOS_DEFAULT = [400, 900];
+
+function esperar(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function fetchConReintentos(
+  url: string,
+  init: RequestInit,
+  opciones?: { intentos?: number; retrasos?: number[] },
+): Promise<Response> {
+  const intentos = Math.max(1, opciones?.intentos ?? RETRASOS_DEFAULT.length + 1);
+  const retrasos = opciones?.retrasos ?? RETRASOS_DEFAULT;
+  let response: Response | undefined;
+
+  for (let intento = 1; intento <= intentos; intento++) {
+    try {
+      response = await fetch(url, init);
+    } catch (err) {
+      // Error de red: reintentar hasta agotar intentos y re-lanzar el último.
+      if (intento === intentos) throw err;
+      await esperar(retrasos[intento - 1] ?? 400);
+      continue;
+    }
+
+    if (response.ok || !STATUS_TRANSITORIO.has(response.status)) return response;
+    if (intento === intentos) return response;
+    await esperar(retrasos[intento - 1] ?? 400);
+  }
+
+  // Inalcanzable (intentos >= 1 siempre retorna o lanza en el loop).
+  throw new Error("Sin respuesta del proveedor de IA");
+}
+
 /**
  * Traduce un error crudo de un proveedor de IA (Gemini/Anthropic) a un
  * mensaje entendible para el usuario. Se usa en los server functions que
@@ -162,7 +203,7 @@ class GeminiProvider implements AIProvider {
       },
     };
 
-    const res = await fetch(
+    const res = await fetchConReintentos(
       `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`,
       {
         method: "POST",
@@ -236,7 +277,7 @@ class AnthropicProvider implements AIProvider {
       return { role: m.role, content: m.content };
     });
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetchConReintentos("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -88,6 +88,7 @@ function NuevaPostulacion() {
   const [imagen, setImagen] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [extraido, setExtraido] = useState(false);
+  const [modoManual, setModoManual] = useState(false);
   const [imagenFile, setImagenFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -145,9 +146,28 @@ function NuevaPostulacion() {
       });
       setRequisitos(res.requirements_required);
       setExtraido(true);
+      setModoManual(false);
       trackEvent(FUNNEL.extraerDatos, { confidence: res.confidence });
     },
   });
+
+  const irAManual = () => {
+    setDatos({
+      role: "",
+      company: "",
+      location: "",
+      destination_email: "",
+      mandatory_subject: "",
+      closing_date: "",
+      confidence: 0,
+      source_notes: "Postulación cargada a mano (Jack no pudo extraer los datos)",
+      requirements_required: [],
+      requirements_preferred: [],
+    });
+    setRequisitos([]);
+    setExtraido(true);
+    setModoManual(true);
+  };
 
   const crear = useMutation({
     mutationFn: () =>
@@ -180,7 +200,8 @@ function NuevaPostulacion() {
     },
   });
 
-  const puedeGenerar = extraido && cvId && !crear.isPending;
+  const puedeGenerar =
+    extraido && cvId && datos.role.trim() !== "" && datos.company.trim() !== "" && !crear.isPending;
 
   return (
     <AppShell
@@ -261,11 +282,26 @@ function NuevaPostulacion() {
             Extraer datos con Jack
           </Button>
 
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={irAManual}
+            disabled={extraido || analizar.isPending}
+            className="self-start"
+          >
+            Prefiero cargar los datos yo
+          </Button>
+
           {analizar.isError ? (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-              {analizar.error instanceof Error
-                ? analizar.error.message
-                : "Error al analizar el aviso. Intentá de nuevo."}
+            <div className="space-y-3">
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                {analizar.error instanceof Error
+                  ? analizar.error.message
+                  : "Error al analizar el aviso. Intentá de nuevo."}
+              </div>
+              <Button variant="outline" size="sm" onClick={irAManual}>
+                Continuar cargando los datos a mano
+              </Button>
             </div>
           ) : null}
         </section>
@@ -283,6 +319,18 @@ function NuevaPostulacion() {
             </p>
           ) : (
             <>
+              {modoManual ? (
+                <div className="space-y-2 rounded-xl border border-accent/40 bg-accent/10 p-4">
+                  <p className="flex items-center gap-2 text-sm font-medium">
+                    <AlertTriangle className="size-4 text-accent" />
+                    Cargado a mano
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Jack no pudo extraer los datos ahora (mucha demanda). Completá los campos del
+                    aviso vos mismo; el mail igual se arma con tu CV.
+                  </p>
+                </div>
+              ) : null}
               <div className="grid gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="puesto">Puesto</Label>
