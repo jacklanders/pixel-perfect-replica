@@ -12,6 +12,37 @@ No implementar nada de esto durante Fases 1 y 2 / Hitos 0–5, salvo decisión e
 - **Fase 8** — Chat de ideación de producto dentro del panel admin.
 - **Fase 9** — Monetización (Ads, pagos, paywall).
 
+## Última sesión — 19/09/2026 (dónde quedamos para retomar)
+
+Entregado y EN PRODUCCIÓN (`https://app.postulaya-jack.workers.dev`, última versión `2a372f66`
+deploy 21:00; session wrangler OAuth activa para deployear en la próxima).
+
+- **Adjunto CV de Jack (pdf-lib) funciona en prod** — shim tslib ampliado a superset 1.x+2.x
+  (commit `2819fa1`), CI verde, deploy `23b9ccd5`. Confirmado por el usuario: el PDF llega adjunto.
+- **Cuerpo del mail NUNCA vacío** — fallback determinístico `generarCuerpoDesdeCv`
+  (`src/lib/ai/cuerpo-postulacion.ts`): si Jack no devuelve cuerpo (caída/JSON incompleto), se arma
+  con la info real del CV. Commit `35370c9`, deploy `42c609ec`. +7 tests. Usuario probó OK.
+- **No atascarse por "mucha demanda" de la IA** — retry con backoff en el provider
+  (`fetchConReintentos`, 3 intentos, 400/900ms ante 429/5xx/red) + **modo manual** en "Cargar aviso"
+  (botón "Prefiero cargar los datos yo" + recuperación tras el error; sirve para imagen/PDF con
+  proveedor caído). Commit `7dbd7e0`, deploy `2a372f66`. +6 tests.
+
+Suite: **87 tests ✅ / typecheck ✅ / lint 0 errores ✅ / build ✅**.
+
+### Siguiente sesión — continuar acá (pendientes Hito 5 / certificación)
+- 🔴 **S2 — Smoke vertical completo del MVP**: se validaron partes (adjunto pdf-lib, cuerpo no vacío,
+  no-atasco por demanda), pero falta el recorrido íntegro login → perfil → CV → aviso → extraer →
+  postular → copiar → Gmail → enviar, + 2ª/3ª operación y **límite diario**.
+- 🟠 **S3 — Casos de error Gmail reales**: token expirado/revocado, 401, 429, 5xx, envío ambiguo,
+  idempotencia (2º envío), adjunto en fallo.
+- 🟠 **S4 — Observabilidad**: setear `VITE_SENTRY_DSN` + `VITE_POSTHOG_KEY` y confirmar eventos
+  (login/CV/extracción/postulación/copy/Gmail/límite).
+- 🟡 **S5 — Docs de cierre**: README + BACKLOG + CHANGELOG al declarar el MVP cerrado.
+- 🟡 **Decidir Vercel** (solo decidir): si el dolor es el dominio largo → dominio custom en
+  Cloudflare Workers sin migrar.
+- Tras S1–S5: **declarar Hito 5 / cierre del MVP**.
+- Post-MVP: **multi-CV** con sugerencia de cuál usar según la vacante.
+
 ## Bugs pendientes verificados (auditoría 06/09/2026 — retomar en próxima sesión)
 
 Auditoría sobre `HEAD` (b72ca21). El repo ya está sincronizado con GitHub; estos bugs viven en el
