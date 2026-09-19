@@ -356,7 +356,8 @@ Estado: feature commiteada y pusheada (89215dc) + CI auto-deploy (76cc0db, 21dd9
 Cierre adicional 19/09: shim ampliado a **superset 1.x+2.x** (falta `__spreadArray` en un cierre de
 `@radix-ui/react-alert-dialog` que el shim 1.14.1 original no exportaba). Suite entera verde
 (typecheck/lint/test 74/build) e interop limpia (0 `__toESM(commonJS(tslib)).default` en todo el
-bundle). Pendiente de verificación real: deploy + confirmación del usuario del envío con CV de Jack.
+bundle). **CERRADO 19/09**: deploy manual a Workers (Version `23b9ccd5-…`) y el usuario confirmó que
+"Enviar desde Gmail" con el CV de Jack (sin archivo subido) llega con el PDF adjunto.
 
 ### Problema (producción)
 "Enviar desde Gmail" con el CV **generado por pdf-lib** (modo "Usar mi CV de Jack" cuando NO hay
