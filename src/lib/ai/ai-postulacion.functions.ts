@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
 import { createAIProvider, traducirErrorIA } from "./ai-provider";
 import { PROMPT_APPLICATION_EMAIL_GENERATION } from "./prompts-postulacion";
 import { cvATexto, perfilATexto } from "./ai.functions";
+import { generarCuerpoDesdeCv } from "./cuerpo-postulacion";
 import { filaACv } from "@/lib/cv.model";
 import { filaAPerfil } from "@/lib/perfil.model";
 import type { ResumeRow } from "@/lib/supabase/types";
@@ -190,9 +191,15 @@ Respondé ÚNICAMENTE con el objeto JSON acordado (sin markdown):
   }
 
   const resultado = generatedEmailSchema.parse(parsed);
+
+  // La IA puede fallar devolviendo un cuerpo vacío (o JSON sin la key). Para
+  // que el mail NUNCA quede sin cuerpo, se arma uno determinístico con la
+  // información real del CV/perfil (nada inventado).
+  const cuerpo = resultado.cuerpo.trim() || generarCuerpoDesdeCv(cv.contenido, perfil, vacante);
+
   return {
-    asunto: resultado.asunto,
-    cuerpo: resultado.cuerpo,
+    asunto: resultado.asunto.trim() || `Postulación — ${vacante.role}`,
+    cuerpo,
     advertencias: resultado.advertencias,
     preguntas: resultado.preguntas,
     cumpleRequisitos: resultado.cumpleRequisitos ?? null,
@@ -377,21 +384,36 @@ export const crearVacanteYPostulacion = createServerFn({ method: "POST" })
         requirements_preferred: data.requirements_preferred,
       });
     } catch (err) {
-      // No bloqueamos la creación: la postulación ya existe.
+      // No bloqueamos la creación: la postulación ya existe. Armamos un cuerpo
+      // determinístico con la info real del CV para que el mail nunca quede
+      // vacío; el usuario puede regenerarlo desde el detalle.
       console.error("No se pudo generar el email de postulación:", err);
+      email = {
+        asunto: `Postulación — ${data.role}`,
+        cuerpo: generarCuerpoDesdeCv(cv.contenido, perfil, {
+          role: data.role,
+          company: data.company,
+        }),
+        advertencias: [],
+        preguntas: [],
+        cumpleRequisitos: null,
+      };
     }
 
-    if (email?.cuerpo || email?.asunto) {
+    if (email.cuerpo) {
       const updateEmail: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
+        generated_body: email.cuerpo,
       };
       if (email.asunto) updateEmail["generated_subject"] = email.asunto;
-      if (email.cuerpo) updateEmail["generated_body"] = email.cuerpo;
-      await context.supabase
+      const { error: errUpdateEmail } = await context.supabase
         .from("applications")
         .update(updateEmail)
         .eq("id", app.id)
         .eq("user_id", context.userId);
+      if (errUpdateEmail) {
+        console.error("No se pudo guardar el email generado:", errUpdateEmail);
+      }
     }
 
     return {

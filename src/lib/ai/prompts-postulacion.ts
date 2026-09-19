@@ -47,6 +47,7 @@ INSTRUCCIONES:
 4. Redactá el cuerpo del email destacando la experiencia más relevante del perfil para ESTA vacante puntual.
 5. Si el perfil tiene una carencia real frente a lo pedido, redactá con honestidad pero en positivo, sin mentir.
 6. No inventes experiencia, títulos ni habilidades.
+7. El campo "cuerpo" NUNCA puede quedar vacío ni ser "". Si hay poca información, redactá un cuerpo breve, cordial y profesional usando SOLO los datos provistos.
 
 FORMATO DE RESPUESTA (JSON obligatorio, sin markdown):
 {
