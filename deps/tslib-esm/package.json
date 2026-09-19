@@ -1,7 +1,7 @@
 ﻿{
   "name": "tslib",
   "version": "1.14.1",
-  "description": "tslib 1.14.1 ESM puro (named exports) para workerd. Reemplaza la copia UMD/CJS que pdf-lib/docx/pdfjs-dist importan con named imports; rolldown entonces lo enlaza estatico y evita __toESM(...).default que workerd evalua a undefined.",
+  "description": "tslib ESM puro (superset: helpers 1.x + 2.x y default export) para workerd. Reemplaza la copia UMD/CJS que pdf-lib/docx/pdfjs-dist importan con named imports; rolldown entonces lo enlaza estatico y evita __toESM(...).default que workerd evalua a undefined. Version 1.14.1 mantiene el rango de pdf-lib; los helpers 2.x (__spreadArray y cia.) los requiere el cierre de radix-ui en el bundle.",
   "license": "0BSD",
   "type": "module",
   "sideEffects": false,

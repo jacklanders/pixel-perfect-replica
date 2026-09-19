@@ -350,9 +350,13 @@ punta. Registrado a partir del reporte de estado del 18/09 (etapa = certificaci�
       pendiente de deploy.
 
 --------------------------------------------------------------------------------
-## RETOMAR: adjunto CV de Jack (pdf-lib) no viaja — crash de tslib en workerd (WIP 18/09, SIN commitear)
+## CERRADO 19/09: adjunto CV de Jack (pdf-lib) no viaja — crash de tslib en workerd
 --------------------------------------------------------------------------------
-Estado del árbol AHORA: M package.json, M bun.lock, ?? deps/  (sin commit, sin push).
+Estado: feature commiteada y pusheada (89215dc) + CI auto-deploy (76cc0db, 21dd97f).
+Cierre adicional 19/09: shim ampliado a **superset 1.x+2.x** (falta `__spreadArray` en un cierre de
+`@radix-ui/react-alert-dialog` que el shim 1.14.1 original no exportaba). Suite entera verde
+(typecheck/lint/test 74/build) e interop limpia (0 `__toESM(commonJS(tslib)).default` en todo el
+bundle). Pendiente de verificación real: deploy + confirmación del usuario del envío con CV de Jack.
 
 ### Problema (producción)
 "Enviar desde Gmail" con el CV **generado por pdf-lib** (modo "Usar mi CV de Jack" cuando NO hay
