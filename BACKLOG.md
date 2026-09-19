@@ -360,6 +360,16 @@ punta. Registrado a partir del reporte de estado del 18/09 (etapa = certificaci�
       (catch de la IA) y en la regeneración desde el detalle; el prompt ahora exige
       cuerpo no vacío y el update loguea el error. Commit `35370c9`, deploy
       `42c609ec`. +7 tests (81 en total).
+- [x] 🟠 **S2 — la creación se atascaba cuando la IA estaba "con demanda".** Con un
+      pico de tráfico (429/503/529), `analizarVacanteConJack` tiraba "Jack está con
+      mucha demanda…" y dejaba `extraido=false`: el panel derecho nunca se mostraba
+      y no se podía seguir. → **Fix 19/09**: (1) `fetchConReintentos` con backoff
+      (3 intentos, 400ms/900ms) ante errores de red y 4xx/5xx transitorios en Gemini
+      y Anthropic; (2) modo manual en "Cargar aviso" ("Prefiero cargar los datos yo" +
+      recuperación tras el error): el flujo nunca queda bloqueado, incluso si el
+      aviso vino como imagen/PDF y el proveedor no responde; (3) "Generar
+      postulación" exige puesto+empresa. Commit `7dbd7e0`, deploy `2a372f66`.
+      +6 tests (87 total).
 
 --------------------------------------------------------------------------------
 ## CERRADO 19/09: adjunto CV de Jack (pdf-lib) no viaja — crash de tslib en workerd
