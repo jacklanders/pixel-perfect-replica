@@ -9,6 +9,12 @@ import {
   exchangeCodeForTokens,
 } from "@/lib/server/gmail-oauth";
 import { getServiceClient } from "@/lib/server/supabase-service";
+import {
+  reportServerError,
+  SERVER_EVENT,
+  STAGE,
+  trackServerEvent,
+} from "@/lib/server/observability";
 
 // ─── Generar URL de autorización Gmail ───
 export const generarGmailAuthUrl = createServerFn({ method: "GET" })
@@ -43,8 +49,16 @@ export const procesarGmailCallback = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator(z.object({ code: z.string().min(1) }))
   .handler(async ({ data, context }) => {
-    const tokens = await exchangeCodeForTokens(data.code);
-    await saveGmailTokens(context.userId, tokens, getServiceClient());
+    try {
+      const tokens = await exchangeCodeForTokens(data.code);
+      await saveGmailTokens(context.userId, tokens, getServiceClient());
+    } catch (err) {
+      // El code de Google es de un solo uso: si esto falla, el usuario tiene que
+      // reconectar. Se reporta el error crudo (nunca el `code`) y se relanza.
+      reportServerError(err, { stage: STAGE.auth, paso: "gmail_callback" });
+      throw err;
+    }
+    trackServerEvent(SERVER_EVENT.gmailConectado, { etapa: STAGE.auth });
     return { ok: true as const };
   });
 
@@ -53,6 +67,7 @@ export const desconectarGmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await disconnectGmail(context.userId, getServiceClient());
+    trackServerEvent(SERVER_EVENT.gmailDesconectado, { etapa: STAGE.auth });
     return { ok: true as const };
   });
 

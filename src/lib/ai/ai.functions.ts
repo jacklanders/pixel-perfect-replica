@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
+import { reportServerError, STAGE } from "@/lib/server/observability";
 import { createAIProvider, traducirErrorIA } from "@/lib/ai/ai-provider";
 import { PROMPT_RESUME_IMPROVEMENT, SYSTEM_PROMPT_BASE } from "@/lib/ai/prompts";
 import { filaACv } from "@/lib/cv.model";
@@ -177,6 +178,7 @@ export const mejorarCvConJack = createServerFn({ method: "POST" })
         temperature: 0.7,
       });
     } catch (err) {
+      reportServerError(err, { stage: STAGE.ia, paso: "mejorar_cv" });
       throw traducirErrorIA(err);
     }
 

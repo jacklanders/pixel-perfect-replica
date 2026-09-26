@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useRouter, Link } from "@tanstack/react-router";
 
 import { reportLovableError } from "@/lib/lovable-error-reporting";
+import { reportTechnicalError } from "@/lib/observability";
 
 interface RouteErrorProps {
   error: Error;
@@ -14,6 +15,9 @@ export function RouteError({ error, reset }: RouteErrorProps) {
   useEffect(() => {
     console.error(error);
     reportLovableError(error, { boundary: "tanstack_route_error_component" });
+    // Solo el mensaje y el nombre: el stack lo agrupa Sentry solo y el objeto
+    // crudo puede arrastrar datos de la request que los vamos a exponer.
+    reportTechnicalError(error, { boundary: "route", mensaje: error.message });
   }, [error]);
 
   return (

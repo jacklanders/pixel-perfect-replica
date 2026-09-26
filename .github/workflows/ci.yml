@@ -79,6 +79,14 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Observabilidad: el DSN de Sentry y la project key de PostHog son
+          # claves PÚBLICAS (van embebidas en el bundle del cliente por diseño),
+          # así que alcanza con definirlas como repository variables
+          # (Settings → Secrets and variables → Actions → Variables), no secrets.
+          # Si no están, el build sale igual: los SDKs no se inicializan.
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+          VITE_POSTHOG_KEY: ${{ vars.VITE_POSTHOG_KEY }}
+          VITE_POSTHOG_HOST: ${{ vars.VITE_POSTHOG_HOST }}
 
       - name: Deploy a Cloudflare Workers
         run: bunx nitro deploy --prebuilt

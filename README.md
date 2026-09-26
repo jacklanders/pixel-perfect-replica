@@ -177,8 +177,10 @@ npx wrangler secret put OAUTH_ENCRYPTION_KEY
 npx wrangler secret put GEMINI_API_KEY          # si AI_PROVIDER=gemini
 npx wrangler secret put ANTHROPIC_API_KEY       # si AI_PROVIDER=anthropic
 # y como variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, AI_PROVIDER,
-# GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI (apuntando al dominio de producción),
-# VITE_SENTRY_DSN, VITE_POSTHOG_KEY, VITE_POSTHOG_HOST (si aplican)
+# GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI (apuntando al dominio de producción).
+# La observabilidad NO va acá: VITE_SENTRY_DSN / VITE_POSTHOG_KEY / VITE_POSTHOG_HOST
+# son claves públicas embebidas en el bundle, así que se inlinean en el build del
+# deploy (repository variables de GitHub). Ver "Observabilidad" más abajo.
 ```
 
 Pasos de post-deploy (una vez por dominio):
@@ -211,8 +213,9 @@ Pasos de post-deploy (una vez por dominio):
   `app_settings.max_upload_size_mb` (default 10MB); se borra del Storage tras envío.
 - **E2E sin servicios externos** (`MOCK_AI`/`MOCK_GMAIL`) para no depender de Google en CI,
   manteniendo DB/Storage/RPC reales.
-- **Observabilidad opcional y privacy-first:** Sentry/PostHog solo se inicializan si sus
-  env vars existen; Sentry nunca recibe CVs/mails/tokens; PostHog enmascara inputs y emails.
+- **Observabilidad opcional y privacy-first:** Sentry/PostHog (cliente **y** server) solo
+  se inicializan si sus env vars existen; Sentry nunca recibe CVs/mails/tokens y todo
+  contexto pasa por un filtro que redacta datos personales.
 
 ## Smoke test en producción (checklist)
 
@@ -229,16 +232,42 @@ Pasos de post-deploy (una vez por dominio):
 ## Observabilidad (Sentry / PostHog)
 
 Integrados tras env vars (`VITE_SENTRY_DSN`, `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST`).
-Sin ellas la app anda igual y los SDKs ni se descargan. Con ellas:
+Son claves **públicas embebidas en el bundle** (por eso van con prefijo `VITE_`) y las
+usa **el mismo** cliente y el server: con definirlas queda instrumentado el flujo
+completo. Sin ellas la app anda igual y ningún SDK se inicializa.
 
-- **Sentry:** errores de runtime vía `reportTechnicalError()` (ya usado por
-  `lovable-error-reporting` y el error component de la raíz).
-- **PostHog:** eventos de funnel `funnel_*` en login, crear CV, extraer datos,
-  generar postulación, copiar, enviar por Gmail y bloqueo de límite diario.
+**Dónde se reporta**
+
+| Capa | Qué reporta | Dónde |
+| --- | --- | --- |
+| Navegador | Errores de render/loader (`RouteError`, error component raíz), login OK/fallido, CV creado (manual o desde archivo), error al subir CV, extracción con IA, postulación generada, copiar | `src/lib/observability.ts` |
+| Server | Todo lo que el browser nunca ve: error crudo del proveedor de IA (se traduce antes de llegar al usuario), error de OAuth de Gmail, envío por Gmail rechazado/ambiguo, fallo al persistir el `sent`, error del entry del worker, SSR tragado por h3 | `src/lib/server/observability.ts` |
+
+- **Sentry:** `Sentry.withSentry()` en `src/server.ts` (única vía pública del SDK de
+  Cloudflare) + `reportTechnicalError()` / `reportServerError()` en los puntos de fallo.
+- **PostHog:** eventos de funnel `funnel_*`. Los emite **una sola fuente por evento**:
+  el navegador los de UI (login, CV, extracción, generación, copiar) y el server los de
+  resultado (Gmail enviado, límite diario alcanzado, OAuth conectado, reenvío bloqueado),
+  que son los que no dependen de que la pestaña siga abierta.
+- **Privacidad:** `sanitizeProps()` (`src/lib/server/observability.ts`) deja pasar solo
+  primitivos, redacta claves personales/sensibles (email, tokens, cuerpos, CV, paths) y
+  corta textos >200 caracteres. `sendDefaultPii: false`, y los mensajes de excepción se
+  truncan a 500 caracteres antes de salir (los proveedores de IA devuelven cuerpos crudos).
+
+**Configuración en producción** (sin secretos: son repository variables de GitHub,
+Settings → Secrets and variables → Actions → Variables, que el job `deploy` inlinea en
+el build):
+
+```
+VITE_SENTRY_DSN=https://<key>@<org>.ingest.sentry.io/<project>
+VITE_POSTHOG_KEY=phc_...
+VITE_POSTHOG_HOST=https://us.i.posthog.com   # opcional
+```
 
 **Verificación en producción pendiente de claves** (no se configuraron DSN/key aún):
-probar que al lanzar un error controlado llega `captureException` a Sentry y que los
-`funnel_*` aparecen en PostHog (Person/events).
+provocar un error controlado (p. ej. el `catch` de "Cargar aviso" con la IA caída) y
+comprobar que llega `captureException` a Sentry, y que los `funnel_*` aparecen en
+PostHog → Activity (events).
 
 ## Calidad
 

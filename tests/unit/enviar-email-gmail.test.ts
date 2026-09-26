@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FakeSupabase, rowResult, fakeResponse, errResult } from "./supabase-fake";
 import * as oauth from "@/lib/server/gmail-oauth";
 import { enviarEmailGmailCore } from "@/lib/server/enviar-postulacion-email";
+import { FUNNEL, SERVER_EVENT } from "@/lib/server/observability";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { gmailState } from "./gmail-test-state";
 
@@ -9,6 +10,18 @@ import { gmailState } from "./gmail-test-state";
 vi.mock("@/lib/server/supabase-service", () => ({
   getEnv: (key: string) => gmailState.env[key],
   getServiceClient: () => gmailState.client,
+}));
+
+// Observabilidad: sin DSN/key el módulo real solo loguea. Se intercepta para
+// assertar qué eventos del funnel se emiten (y cuáles NO, para no duplicarlos).
+const { trackServerEvent, reportServerError } = vi.hoisted(() => ({
+  trackServerEvent: vi.fn(),
+  reportServerError: vi.fn(),
+}));
+vi.mock("@/lib/server/observability", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/observability")>()),
+  trackServerEvent,
+  reportServerError,
 }));
 
 const isoIn = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
@@ -53,6 +66,8 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     client = new FakeSupabase();
     gmailState.client = client;
     rpcNames = [];
+    trackServerEvent.mockClear();
+    reportServerError.mockClear();
 
     client.handlers["app_settings"] = () => rowResult({ value: "10" });
     client.handlers["profiles"] = () => rowResult({ user_id: "user-1", email: "juan@test.com" });
@@ -312,5 +327,104 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     expect(gmail).toHaveLength(1);
     expect(rpcNames).toContain("increment_daily_usage");
     expect(rpcNames).not.toContain("decrement_daily_usage");
+  });
+
+  /* ─── Eventos del funnel (PostHog) ─── */
+
+  it("emite funnel_gmail_enviado una sola vez, con el límite y el modo de adjunto", async () => {
+    const accessEnc = await oauth.encrypt("access-valid");
+    client.handlers["oauth_connections"] = () =>
+      rowResult({
+        encrypted_access_token: accessEnc,
+        refresh_token: null,
+        expires_at: isoIn(60 * 60),
+      });
+    fetchStub.mockResolvedValue(fakeResponse(200, { id: "gmail-1" }));
+
+    await enviarEmailGmailCore(coreArgs(client, { includeCopy: true }));
+
+    const enviados = trackServerEvent.mock.calls.filter((c) => c[0] === FUNNEL.enviarGmail);
+    expect(enviados).toHaveLength(1);
+    expect(enviados[0]?.[1]).toEqual({ con_adjunto: false, con_copia: true, limite: 2 });
+  });
+
+  it("el límite diario emite su evento y ningún 'enviado'", async () => {
+    const accessEnc = await oauth.encrypt("access-valid");
+    client.handlers["oauth_connections"] = () =>
+      rowResult({
+        encrypted_access_token: accessEnc,
+        refresh_token: null,
+        expires_at: isoIn(60 * 60),
+      });
+    client.rpcHandler = async (fn) => {
+      rpcNames.push(fn);
+      if (fn === "obtener_limite_diario_efectivo") {
+        return rowResult([{ limite: 2, rol: "user", override: false }]);
+      }
+      return rowResult([{ allowed: false }]);
+    };
+
+    await expect(enviarEmailGmailCore(coreArgs(client))).rejects.toThrow("Límite diario alcanzado");
+
+    expect(trackServerEvent).toHaveBeenCalledWith(FUNNEL.limiteDiario, {
+      limite: 2,
+      etapa: "limite_diario",
+    });
+    expect(trackServerEvent).not.toHaveBeenCalledWith(FUNNEL.enviarGmail, expect.anything());
+    // Cortar por cuota no es un error técnico.
+    expect(reportServerError).not.toHaveBeenCalled();
+  });
+
+  it("el reenvío de una postulación ya enviada emite su propio evento (idempotencia)", async () => {
+    client.handlers["applications"] = () =>
+      rowResult({ ...BASE_APP, status: "sent", sent_at: isoIn(-100) });
+
+    await expect(enviarEmailGmailCore(coreArgs(client))).rejects.toThrow(
+      "Esa postulación ya fue enviada",
+    );
+
+    expect(trackServerEvent).toHaveBeenCalledWith(SERVER_EVENT.gmailEnvioDuplicado, {
+      etapa: "envio_gmail",
+    });
+  });
+
+  it("un rechazo definitivo de Gmail se reporta con el resultado, no como ambiguo", async () => {
+    const accessEnc = await oauth.encrypt("access-valid");
+    client.handlers["oauth_connections"] = () =>
+      rowResult({
+        encrypted_access_token: accessEnc,
+        refresh_token: null,
+        expires_at: isoIn(60 * 60),
+      });
+    fetchStub.mockResolvedValue(fakeResponse(403, { error: { message: "insufficient scopes" } }));
+
+    await expect(enviarEmailGmailCore(coreArgs(client))).rejects.toBeDefined();
+
+    expect(reportServerError).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ resultado: "rechazado", cuota_revertida: true }),
+    );
+    expect(rpcNames).toContain("decrement_daily_usage");
+  });
+
+  it("un resultado ambiguo se reporta como ambiguo y sin revertir cuota", async () => {
+    const accessEnc = await oauth.encrypt("access-valid");
+    client.handlers["oauth_connections"] = () =>
+      rowResult({
+        encrypted_access_token: accessEnc,
+        refresh_token: null,
+        expires_at: isoIn(60 * 60),
+      });
+    fetchStub.mockRejectedValue(new TypeError("connection reset"));
+
+    await expect(enviarEmailGmailCore(coreArgs(client))).rejects.toMatchObject({
+      name: "GmailEnvioAmbiguoError",
+    });
+
+    expect(reportServerError).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ resultado: "ambiguo", cuota_revertida: false }),
+    );
+    expect(trackServerEvent).not.toHaveBeenCalledWith(FUNNEL.enviarGmail, expect.anything());
   });
 });

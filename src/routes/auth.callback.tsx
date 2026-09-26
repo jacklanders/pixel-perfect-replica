@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { FUNNEL, trackEvent } from "@/lib/observability";
+import { FUNNEL, reportTechnicalError, trackEvent } from "@/lib/observability";
 
 export const Route = createFileRoute("/auth/callback")({
   // Pasa por /login (?redirect=<url>) y por el redirectTo de Google.
@@ -34,11 +34,13 @@ function AuthCallback() {
 
       if (errorParam) {
         console.error("[auth] OAuth error:", errorParam);
+        trackEvent(FUNNEL.loginFalla, { motivo: "oauth_error", codigo: errorParam });
         navigate({ to: "/login", search: { error: "auth_fallo", redirect: backTo } });
         return;
       }
 
       if (!code) {
+        trackEvent(FUNNEL.loginFalla, { motivo: "sin_code" });
         navigate({ to: "/login", search: { error: "sin_code", redirect: backTo } });
         return;
       }
@@ -77,6 +79,11 @@ function AuthCallback() {
 
       // 4. Solo si definitivamente no hay sesión, mostrar error
       console.error("[auth] Exchange failed:", exchangeError.message);
+      trackEvent(FUNNEL.loginFalla, { motivo: "exchange_fallido" });
+      reportTechnicalError(new Error(exchangeError.message), {
+        stage: "auth_callback",
+        motivo: "exchange_fallido",
+      });
       setStatus("Error al procesar el login. Redirigiendo…");
       setTimeout(
         () => navigate({ to: "/login", search: { error: "auth_fallo", redirect: backTo } }),

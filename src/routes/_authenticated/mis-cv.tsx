@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { listarCvs, crearCv, borrarCv, duplicarCv, crearCvDesdeUpload } from "@/lib/cv.functions";
 import { extraerTextoPdf, extraerTextoDocx, detectarTipoArchivo } from "@/lib/extract";
 import { hace } from "@/lib/cv.model";
-import { FUNNEL, trackEvent } from "@/lib/observability";
+import { FUNNEL, reportTechnicalError, trackEvent } from "@/lib/observability";
 
 export const Route = createFileRoute("/_authenticated/mis-cv")({
   component: MisCvsPage,
@@ -40,7 +40,7 @@ function MisCvsPage() {
     mutationFn: () => createCvFn({ data: { title: "Mi CV" } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: cvsQueryKey });
-      trackEvent(FUNNEL.crearCv);
+      trackEvent(FUNNEL.crearCv, { origen: "manual" });
       toast.success("CV creado");
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Error al crear CV"),
@@ -119,8 +119,11 @@ function MisCvsPage() {
       });
 
       queryClient.invalidateQueries({ queryKey: cvsQueryKey });
+      // El funnel cuenta los dos caminos de alta: desde cero y desde archivo.
+      trackEvent(FUNNEL.crearCv, { origen: "upload", tipo });
       toast.success(`CV "${nuevoCv.title}" creado desde ${tipo.toUpperCase()}`);
     } catch (err) {
+      reportTechnicalError(err, { stage: "mis_cv_upload", tipo });
       toast.error(err instanceof Error ? err.message : "Error al procesar el archivo");
     } finally {
       setUploading(false);

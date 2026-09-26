@@ -11,7 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { initObservability } from "../lib/observability";
+import { initObservability, reportTechnicalError } from "../lib/observability";
 
 function NotFoundComponent() {
   return (
@@ -40,6 +40,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    reportTechnicalError(error, { boundary: "root", mensaje: error.message });
   }, [error]);
 
   return (

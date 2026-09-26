@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/lib/supabase/auth-middleware";
+import { reportServerError, STAGE } from "@/lib/server/observability";
 import { createAIProvider, traducirErrorIA } from "./ai-provider";
 import { PROMPT_APPLICATION_EMAIL_GENERATION } from "./prompts-postulacion";
 import { cvATexto, perfilATexto } from "./ai.functions";
@@ -87,6 +88,10 @@ ${data.raw_text}
         ...(images ? { images } : {}),
       });
     } catch (err) {
+      // El error crudo (status + respuesta del proveedor) no llega nunca al
+      // usuario: traducirErrorIA lo reemplaza por un mensaje genérico. Se reporta
+      // acá para no perder el detalle real en Sentry.
+      reportServerError(err, { stage: STAGE.ia, paso: "analizar_vacante" });
       throw traducirErrorIA(err);
     }
 
@@ -175,6 +180,7 @@ Respondé ÚNICAMENTE con el objeto JSON acordado (sin markdown):
       temperature: 0.6,
     });
   } catch (err) {
+    reportServerError(err, { stage: STAGE.ia, paso: "generar_email" });
     throw traducirErrorIA(err);
   }
 

@@ -8,6 +8,13 @@
 
 import { enviarPostulacionGmail, GmailEnvioAmbiguoError } from "@/lib/server/gmail-send";
 import { obtenerLimiteDiarioEfectivo } from "@/lib/server/limite-diario";
+import {
+  FUNNEL,
+  reportServerError,
+  SERVER_EVENT,
+  STAGE,
+  trackServerEvent,
+} from "@/lib/server/observability";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -51,6 +58,7 @@ export async function enviarEmailGmailCore(argv: {
   // una postulación ya enviada. Acá se corta ese camino para no duplicar el
   // mail ni volver a gastar cuota.
   if (app.status === "sent") {
+    trackServerEvent(SERVER_EVENT.gmailEnvioDuplicado, { etapa: STAGE.envioGmail });
     throw new Error("Esa postulación ya fue enviada");
   }
 
@@ -63,6 +71,10 @@ export async function enviarEmailGmailCore(argv: {
 
   const allowed = (limitResult as { allowed: boolean }[])[0]?.allowed ?? false;
   if (!allowed) {
+    // No es un error técnico: es el corte de cuota del producto. Se emite el
+    // evento del funnel (que la UI no puede perder aunque el usuario cierre la
+    // pestaña) y se devuelve el mismo mensaje de siempre.
+    trackServerEvent(FUNNEL.limiteDiario, { limite, etapa: STAGE.limiteDiario });
     throw new Error(
       `Límite diario alcanzado. Podés generar hasta ${limite} postulaciones por día.`,
     );
@@ -124,7 +136,14 @@ export async function enviarEmailGmailCore(argv: {
     // pudo haber llegado aunque no hubo respuesta, o hubo 200 ilegible), NO se
     // revierte: el correo pudo haber salido, y devolver la cuota habilitaría un
     // reintento que duplica el envío.
-    if (!(err instanceof GmailEnvioAmbiguoError)) {
+    const ambiguo = err instanceof GmailEnvioAmbiguoError;
+    reportServerError(err, {
+      stage: STAGE.envioGmail,
+      resultado: ambiguo ? "ambiguo" : "rechazado",
+      con_adjunto: Boolean(adjunto),
+      cuota_revertida: !ambiguo,
+    });
+    if (!ambiguo) {
       try {
         await supabase.rpc("decrement_daily_usage");
       } catch {
@@ -151,6 +170,21 @@ export async function enviarEmailGmailCore(argv: {
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    // El mail YA salió por Gmail: la cuota no se revierte (revertir habilitaría
+    // un reintento que duplica el correo), pero el fallo de persistencia deja la
+    // postulación en un estado inconsistente que hay que poder diagnosticar.
+    reportServerError(new Error(error.message), {
+      stage: STAGE.envioGmail,
+      resultado: "persistencia_fallida",
+      con_adjunto: Boolean(adjunto),
+    });
+    throw new Error(error.message);
+  }
+  trackServerEvent(FUNNEL.enviarGmail, {
+    con_adjunto: Boolean(adjunto),
+    con_copia: data.includeCopy ?? false,
+    limite,
+  });
   return { ...row, messageId };
 }

@@ -444,7 +444,9 @@ function DetallePostulacion() {
         },
       } as unknown as Parameters<typeof enviarEmailGmail>[0]),
     onSuccess: () => {
-      trackEvent(FUNNEL.enviarGmail);
+      // El evento del envío lo emite el server (enviar-postulacion-email.ts)
+      // cuando el mail salió Y se persistió el status: acá no se emite para no
+      // contar dos veces el mismo paso del funnel.
       toast.success("Postulación enviada por Gmail");
       setGmailError(null);
       setArchivoAdjunto(null);
@@ -452,9 +454,7 @@ function DetallePostulacion() {
     },
     onError: (err) => {
       const msg = err instanceof Error ? err.message : "Error al enviar por Gmail";
-      if (msg.includes("Límite diario")) {
-        trackEvent(FUNNEL.limiteDiario);
-      }
+      // Ídem con el límite diario: lo emite el server, que es quien corta.
       setGmailError(msg);
       void refetchGmail();
       if (msg.includes("401") || msg.includes("Token expirado") || msg.includes("refresh")) {

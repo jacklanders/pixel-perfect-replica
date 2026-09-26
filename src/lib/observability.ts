@@ -61,6 +61,7 @@ export function reportTechnicalError(error: unknown, context?: Record<string, st
 /** Nombres de eventos del funnel principal (PostHog). */
 export const FUNNEL = {
   loginOk: "funnel_login_ok",
+  loginFalla: "funnel_login_falla",
   crearCv: "funnel_cv_creado",
   extraerDatos: "funnel_extraer_ok",
   generarPostulacion: "funnel_postulacion_generada",

@@ -37,6 +37,7 @@ Suite: **87 tests ✅ / typecheck ✅ / lint 0 errores ✅ / build ✅**.
   idempotencia (2º envío), adjunto en fallo.
 - 🟠 **S4 — Observabilidad**: setear `VITE_SENTRY_DSN` + `VITE_POSTHOG_KEY` y confirmar eventos
   (login/CV/extracción/postulación/copy/Gmail/límite).
+  → **Código listo 25/09, falta activar y verificar** (ver "Certificación del MVP").
 - 🟡 **S5 — Docs de cierre**: README + BACKLOG + CHANGELOG al declarar el MVP cerrado.
 - 🟡 **Decidir Vercel** (solo decidir): si el dolor es el dominio largo → dominio custom en
   Cloudflare Workers sin migrar.
@@ -363,6 +364,8 @@ punta. Registrado a partir del reporte de estado del 18/09 (etapa = certificaci�
       5xx, envío ambiguo, segundo envío (idempotencia), adjuntos en fallo (S3).
 - [ ] 🟠 **Observabilidad activada** — setear `VITE_SENTRY_DSN` + `VITE_POSTHOG_KEY` y confirmar que
       llegan eventos de login/CV/extracción/postulación/copy/Gmail/límite (S4).
+      → **Ver "S4 — Observabilidad (25/09)" más abajo: la instrumentación de cliente y server
+      está completa y testeada; falta que el usuario cree las cuentas y cargue las claves.**
 - [ ] 🟡 **Documentación de cierre** — README (tabla 0001→0015 ya actualizada 18/09, commit `9d3b9d8`)
       + BACKLOG + CHANGELOG, al declarar el MVP cerrado (S5).
 - [ ] 🟡 **Decidir Vercel** (solo decidir, no necesariamente migrar) — si el dolor es solo el dominio
@@ -401,6 +404,60 @@ punta. Registrado a partir del reporte de estado del 18/09 (etapa = certificaci�
       aviso vino como imagen/PDF y el proveedor no responde; (3) "Generar
       postulación" exige puesto+empresa. Commit `7dbd7e0`, deploy `2a372f66`.
       +6 tests (87 total).
+
+--------------------------------------------------------------------------------
+## S4 — Observabilidad (25/09/2026): instrumentación lista, faltan las claves
+--------------------------------------------------------------------------------
+Estado: **código completo y en verde** (typecheck/lint/120 tests/build), **sin deploy**.
+Lo que YA estaba (commit `7560448`): el módulo cliente y los 7 eventos del funnel, pero
+inerte — sin `VITE_SENTRY_DSN`/`VITE_POSTHOG_KEY` no se inicializa ningún SDK, y
+`reportTechnicalError` no tenía **ni un solo call site** (el README además afirmaba lo
+contrario). Los eventos de Gmail/límite se emitían desde la UI, con un match frágil del
+texto del error.
+
+### Hecho en esta sesión
+- **Server-side nuevo** (`src/lib/server/observability.ts`): `reportServerError()` +
+  `trackServerEvent()`, con `sanitizeProps()` (solo primitivos; redacta email/token/cuerpo/
+  CV/path; corta textos >200 chars) y `beforeSend` que trunca a 500 chars el mensaje de las
+  excepciones (los proveedores de IA devuelven el body crudo). Sentry se inicializa con
+  `Sentry.withSentry()` en `src/server.ts` (es la única vía pública del SDK de Cloudflare:
+  `init` no se exporta). `posthog-node` con `flushAt: 1, flushInterval: 0` porque un isolate
+  se congela ni bien responde.
+- **Puntos server instrumentados:** error crudo de la IA en los 3 `traducirErrorIA` (el
+  browser nunca veía el status real del proveedor), callback de OAuth de Gmail (con y sin
+  código), envío por Gmail `rechazado` vs `ambiguo` + `cuota_revertida`, fallo del `UPDATE`
+  que marca `sent`, error del entry del worker y SSR tragado por h3.
+- **Un solo emisor por evento** (evita contar dos veces el funnel): el server emite
+  `funnel_gmail_enviado` / `funnel_limite_diario` (ya no la UI, que además adivinaba por
+  `msg.includes("Límite diario")`); la UI sigue con login/CV/extracción/generación/copiar.
+  Eventos server extra: `gmail_conectado`, `gmail_desconectado`, `gmail_envio_duplicado`.
+- **Gaps de cliente cerrados:** `reportTechnicalError()` en `RouteError` y en el error
+  component raíz; `funnel_login_falla` (oauth_error / sin_code / exchange_fallido) + Sentry
+  del fallo de intercambio; `funnel_cv_creado` con `origen` (manual/upload) y Sentry del
+  fallo al procesar el archivo.
+- **CI:** el job `deploy` pasa `VITE_SENTRY_DSN`/`VITE_POSTHOG_KEY`/`VITE_POSTHOG_HOST`
+  desde *repository variables* (son claves públicas embebidas, no secrets). Build y e2e
+  los dejan vacíos a propósito (así el CI nunca manda eventos a la telemetría real).
+- **Tests:** +33 (87 → 120). Nuevos: `src/lib/observability.test.ts` (11),
+  `tests/unit/observability-server.test.ts` (17, entorno node) y, en
+  `tests/unit/enviar-email-gmail.test.ts`, los asserts de qué evento se emite y cuál no.
+- Bundle verificado: `nodejs_compat` ya estaba en el `wrangler.json` generado (sin eso
+  `withSentry` no puede usar `AsyncLocalStorage`); `@sentry/cloudflare` y `posthog-node`
+  quedan como chunks separados del server.
+
+### Lo que falta (depende del usuario)
+- [ ] Crear las cuentas: proyecto en **sentry.io** (platform → Cloudflare) y proyecto en
+      **app.posthog.com** (o el EU: `https://eu.i.posthog.com`).
+- [ ] Cargar `VITE_SENTRY_DSN` y `VITE_POSTHOG_KEY` como repository variables de GitHub y
+      pushear (el deploy las inlinea). Para local: `.env.local`.
+- [ ] Deploy + verificación en producción: un error controlado a Sentry y los `funnel_*` en
+      PostHog → Activity.
+
+### Riesgo conocido
+- Sin claves, `reportServerError` cae al `console.error` (visible en los logs del Worker):
+  es el comportamiento de antes, no una regresión.
+- `withSentry` re-lanza las excepciones del handler; nuestro `fetch` ya las captura todas y
+  devuelve la página 500, así que no cambia la respuesta al usuario.
 
 --------------------------------------------------------------------------------
 ## CERRADO 19/09: adjunto CV de Jack (pdf-lib) no viaja — crash de tslib en workerd
