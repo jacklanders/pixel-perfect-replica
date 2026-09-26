@@ -66,6 +66,26 @@ UN solo lugar server-side para que la UI y el corte real del envío coincidan:
 Límites diarios configurables en producción. Próximos pasos del BACKLOG.md (manuales/decisión):
 item 13 smoke login Google con Docker, item 14 migración Vercel (decisión), item 12 multi-CV post-MVP.
 
+<!-- ESTADO ACTUAL (25/09) — este bloque manda sobre lo de arriba -->
+## EN CURSO: S4 — Observabilidad (cliente + server), 25/09
+- Código **completo y verificado** (typecheck / lint 0 errores / **120 tests** / build) y
+  **pusheado en `a356c52`**. No queda trabajo de código.
+- Hecho: `src/lib/server/observability.ts` (nuevo) + `Sentry.withSentry()` en `src/server.ts`;
+  instrumentados IA, OAuth de Gmail, envío de Gmail (rechazado/ambiguo/cuota), error del
+  entry y SSR tragado por h3; cliente: `RouteError` + error component raíz, `funnel_login_falla`,
+  `funnel_cv_creado` (manual/upload). Un solo emisor por evento (Gmail/límite ahora son del
+  server, no de la UI). `ci.yml` inlinea las `VITE_*` de observabilidad desde repository variables.
+- **Pendiente (necesita al usuario, no se puede hacer sin credenciales):**
+  1. Confirmar el deploy de `a356c52` (Cloudflare → Workers & Pages → `app` → Deployments;
+     al dejarlo, prod seguía con la build del 19/09).
+  2. Crear proyecto en sentry.io (DSN) y en app.posthog.com (key `phc_`), y cargarlas como
+     repository variables: `VITE_SENTRY_DSN`, `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST`.
+  3. Un push más (el build inlinea las claves; si el push va antes que las variables, sale
+     una build inerte) y verificar en Sentry + PostHog.
+- **Retomar exactamente desde** la sección "▶ RETOMAR ACÁ" del `BACKLOG.md` (tiene el comando
+  PowerShell para chequear el deploy sin `gh`, que no está instalado en la máquina).
+- Después de S4, el backlog sigue con S3 (verificar `Application ↔ Wages` en prod) y S5.
+
 ## PLAN DE TRABAJO (orden de ejecución)
 1. Resolver `obtenerLimiteDiarioEfectivo` ✅ (RPC 0015 + `limite-diario.ts`, hecho 18/09)
 2. Cablear `getUsoDiario` al resolver. ✅

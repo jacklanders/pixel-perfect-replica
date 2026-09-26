@@ -408,7 +408,36 @@ punta. Registrado a partir del reporte de estado del 18/09 (etapa = certificaci�
 --------------------------------------------------------------------------------
 ## S4 — Observabilidad (25/09/2026): instrumentación lista, faltan las claves
 --------------------------------------------------------------------------------
-Estado: **código completo y en verde** (typecheck/lint/120 tests/build), **sin deploy**.
+> ### ▶ RETOMAR ACÁ (25/09, se deja la sesión abierta)
+> **Todo el código está hecho, verificado y pusheado en `a356c52`.** No queda trabajo de
+> código: lo pendiente necesita credenciales del usuario.
+> 1. **Ver el deploy** (quedó sin confirmar): Cloudflare → Workers & Pages → `app` →
+>    Deployments. Al dejar la sesión, prod seguía sirviendo la build del 19/09
+>    (`/assets/index-vjYYtF5a.js`), o sea que el run de Actions del push `a356c52` no
+>    había aterrizado (o falló). Chequeo HTTP para confirmarlo sin `gh` (no hay CLI
+>    instalada en la máquina):
+>    ```powershell
+>    $idx = Invoke-WebRequest "https://app.postulaya-jack.workers.dev/?cb=$([guid]::NewGuid().ToString('N').Substring(0,8))" -UseBasicParsing -Headers @{ 'Cache-Control'='no-store' }
+>    $src = ([regex]::Matches($idx.Content,'src="(/assets/[^"]+\.js)"')[0]).Groups[1].Value
+>    (Invoke-WebRequest "https://app.postulaya-jack.workers.dev$src" -UseBasicParsing).Content -match 'funnel_login_falla'
+>    ```
+>    `True` = build nueva en pie. Ese string solo existe en el bundle de este commit.
+> 2. **Crear las cuentas y cargar las claves** (guía completa en el README, sección
+>    "Observabilidad"): proyecto en sentry.io → DSN; proyecto en app.posthog.com → key
+>    `phc_`. Cargarlas como **repository variables** (Settings → Secrets and variables →
+>    Actions → tab *Variables*): `VITE_SENTRY_DSN`, `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST`.
+>    Local: `.env.local`.
+> 3. **Un push más** (cualquier cambio trivial sirve) → el job `deploy` rebuilda con las
+>    claves inlineadas. Orden importa: las `VITE_*` se inlinean en el build, si el push va
+>    antes que las variables sale una build inerte (no rompe nada).
+> 4. **Verificar**: un error controlado (IA caída en "Cargar aviso") → issue en Sentry;
+>    los `funnel_*` en PostHog → Activity. Después marcar S4 como cerrado acá.
+>
+> Pendientes del backlog que siguen abiertos, en orden: S3 (verificar `Application ↔
+> Wages` en producción) y S5.
+
+Estado: **código completo y en verde** (typecheck/lint/120 tests/build), commit `a356c52`
+pusheado; **deploy sin confirmar**.
 Lo que YA estaba (commit `7560448`): el módulo cliente y los 7 eventos del funnel, pero
 inerte — sin `VITE_SENTRY_DSN`/`VITE_POSTHOG_KEY` no se inicializa ningún SDK, y
 `reportTechnicalError` no tenía **ni un solo call site** (el README además afirmaba lo
