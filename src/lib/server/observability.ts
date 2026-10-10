@@ -120,6 +120,9 @@ function track(promise: Promise<unknown>, ctx?: WaitUntilContext): void {
   // pobló src/server.ts al entrar el request del worker.
   const current = ctx ?? requestContext.getStore();
   if (current?.waitUntil) {
+    // Loguea el anclaje: si acá no aparece, el fetch muere al congelarse el
+    // isolate y nunca llega a PostHog (el síntoma de "no llega nada").
+    console.info("[observability:server] anclado al isolate del request");
     try {
       current.waitUntil(promise.catch(() => undefined));
       return;
@@ -127,6 +130,7 @@ function track(promise: Promise<unknown>, ctx?: WaitUntilContext): void {
       // si waitUntil falla (contexto sin isolate), cae al fire-and-forget
     }
   }
+  console.info("[observability:server] SIN ancla al isolate (fire-and-forget)");
   void promise.catch(() => undefined);
 }
 
@@ -173,6 +177,11 @@ export function trackServerEvent(
     console.info("[observability:server] event", name, sanitizeProps(properties));
     return;
   }
+  console.info(
+    "[observability:server] envío posthog",
+    name,
+    requestContext.getStore()?.waitUntil ? "con-waitUntil" : "sin-waitUntil",
+  );
   // Fetch directo a la API de capture de PostHog (sin posthog-node): `capture()`
   // de la SDK encola el evento y dispara el flush fire-and-forget por dentro, así
   // que la promesa que registrábamos con waitUntil se resolvía sin haber mandado
@@ -186,23 +195,35 @@ async function enviarEventoPostHog(
   event: string,
   properties: Record<string, string | number | boolean>,
 ): Promise<void> {
-  const response = await fetch(`${posthogHost}/capture/`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      api_key: posthogKey,
-      distinct_id: "postulaya-server",
+  try {
+    const response = await fetch(`${posthogHost}/capture/`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        api_key: posthogKey,
+        distinct_id: "postulaya-server",
+        event,
+        properties,
+      }),
+    });
+    if (!response.ok) {
+      const detalle = await response.text().catch(() => "");
+      throw new Error(
+        `PostHog capture devolvió HTTP ${response.status}${
+          detalle ? `: ${detalle.slice(0, 200)}` : ""
+        }`,
+      );
+    }
+    console.info("[observability:server] posthog ok", event);
+  } catch (err) {
+    // No rethrow: el fallo de la telemetría no puede romper el request del
+    // usuario, pero tiene que quedar en el Logs tab y en Sentry para poder
+    // diagnosticar por qué no llegan los eventos del server.
+    console.error("[observability:server] posthog fallo", event, err);
+    reportServerError(err instanceof Error ? err : new Error(String(err)), {
+      stage: "posthog_capture",
       event,
-      properties,
-    }),
-  });
-  if (!response.ok) {
-    const detalle = await response.text().catch(() => "");
-    throw new Error(
-      `PostHog capture devolvió HTTP ${response.status}${
-        detalle ? `: ${detalle.slice(0, 200)}` : ""
-      }`,
-    );
+    });
   }
 }
 

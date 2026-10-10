@@ -270,9 +270,14 @@ describe("observability (server)", () => {
       trackServerEvent("evento_test", {});
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      // El error se traga por el .catch() del track; el caller nunca lo ve.
+      // El el caller nunca ve el error (fire-and-forget), pero el fallo queda
+      // logueado como diagnóstico en el Logs tab / Sentry (sin DSN, a console).
       expect(posthogFetch).toHaveBeenCalledTimes(1);
-      expect(errorSpy).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(
+        "[observability:server] posthog fallo",
+        "evento_test",
+        expect.any(Error),
+      );
       errorSpy.mockRestore();
     });
 
