@@ -115,41 +115,6 @@ export function sentryWorkerOptions(): CloudflareOptions {
   };
 }
 
-type PostHogClient = InstanceType<(typeof import("posthog-node"))["PostHog"]>;
-
-let posthogPromise: Promise<PostHogClient | null> | undefined;
-
-function loadPosthog(): Promise<PostHogClient | null> {
-  if (!posthogKey) return Promise.resolve(null);
-  posthogPromise ??= import("posthog-node")
-    .then(({ PostHog }) => {
-      const client = new PostHog(posthogKey, {
-        host: posthogHost,
-        // Un isolate se puede congelar ni bien termina de responder el request:
-        // cada evento se manda ya, sin esperar a que se llene el batch (si no, se
-        // pierden la mayoría).
-        flushAt: 1,
-        flushInterval: 0,
-      });
-      return client;
-    })
-    .catch((err: unknown) => {
-      console.error("[observability] No se pudo inicializar PostHog (server)", err);
-      return null;
-    });
-  return posthogPromise;
-}
-
-/**
- * Precarga PostHog (Sentry lo inicializa `withSentry`). Sin
- * `VITE_POSTHOG_KEY` es un no-op. Se llama una vez por arranque del worker.
- */
-export function initServerObservability(): void {
-  if (typeof window !== "undefined") return; // en el browser usa src/lib/observability.ts
-  if (!posthogKey) return;
-  void loadPosthog();
-}
-
 function track(promise: Promise<unknown>, ctx?: WaitUntilContext): void {
   // Si el call site no tiene ctx (server fn), lo toma del AsyncLocalStorage que
   // pobló src/server.ts al entrar el request del worker.
@@ -208,17 +173,37 @@ export function trackServerEvent(
     console.info("[observability:server] event", name, sanitizeProps(properties));
     return;
   }
-  track(
-    loadPosthog().then((client) => {
-      client?.capture({
-        distinctId: "postulaya-server",
-        event: name,
-        properties: sanitizeProps(properties),
-      });
-      return undefined;
+  // Fetch directo a la API de capture de PostHog (sin posthog-node): `capture()`
+  // de la SDK encola el evento y dispara el flush fire-and-forget por dentro, así
+  // que la promesa que registrábamos con waitUntil se resolvía sin haber mandado
+  // el HTTP y el evento se perdía al congelarse el isolate. Acá la promesa ES el
+  // POST: si waitUntil la sostiene (o el request sigue vivo), el evento llega.
+  track(enviarEventoPostHog(name, sanitizeProps(properties)), ctx);
+}
+
+/** POST de un solo evento al endpoint de capture de PostHog. */
+async function enviarEventoPostHog(
+  event: string,
+  properties: Record<string, string | number | boolean>,
+): Promise<void> {
+  const response = await fetch(`${posthogHost}/capture/`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      api_key: posthogKey,
+      distinct_id: "postulaya-server",
+      event,
+      properties,
     }),
-    ctx,
-  );
+  });
+  if (!response.ok) {
+    const detalle = await response.text().catch(() => "");
+    throw new Error(
+      `PostHog capture devolvió HTTP ${response.status}${
+        detalle ? `: ${detalle.slice(0, 200)}` : ""
+      }`,
+    );
+  }
 }
 
 /** Etapas de los flujos server-side, para correlacionar un error con su paso. */

@@ -10,18 +10,20 @@ async function cargarObservability() {
   return await import("@/lib/server/observability");
 }
 
-const capture = vi.fn();
-const posthogCapture = vi.fn();
-const posthogConstructor = vi.fn();
+const posthogFetch = vi.fn();
 
-vi.mock("posthog-node", () => ({
-  PostHog: class {
-    capture = posthogCapture;
-    constructor(key: string, options: unknown) {
-      posthogConstructor(key, options);
-    }
-  },
-}));
+/** Stub del endpoint de capture de PostHog (devuelve {"status":"Ok"} por defecto). */
+function stubPosthog(status = 200, body = '{"status":"Ok"}') {
+  vi.stubGlobal(
+    "fetch",
+    posthogFetch.mockResolvedValue({
+      ok: status >= 200 && status < 400,
+      status,
+      text: async () => body,
+    }),
+  );
+}
+
 vi.mock("@sentry/cloudflare", () => ({
   captureException: vi.fn(),
 }));
@@ -38,6 +40,7 @@ describe("observability (server)", () => {
     vi.stubEnv("VITE_SENTRY_DSN", undefined);
     vi.stubEnv("VITE_POSTHOG_KEY", undefined);
     vi.stubEnv("VITE_POSTHOG_HOST", undefined);
+    stubPosthog();
   });
 
   afterEach(() => {
@@ -197,7 +200,7 @@ describe("observability (server)", () => {
       spy.mockRestore();
     });
 
-    it("usa el waitUntil del isolate cuando está disponible", async () => {
+    it("emite el evento por fetch y lo ancla al waitUntil del isolate", async () => {
       vi.stubEnv("VITE_POSTHOG_KEY", KEY);
       const { trackServerEvent } = await cargarObservability();
 
@@ -206,8 +209,9 @@ describe("observability (server)", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(promesas).toHaveLength(1);
-      expect(posthogCapture).toHaveBeenCalledWith(
-        expect.objectContaining({ event: "evento_test", distinctId: "postulaya-server" }),
+      expect(posthogFetch).toHaveBeenCalledWith(
+        "https://us.i.posthog.com/capture/",
+        expect.objectContaining({ method: "POST" }),
       );
     });
   });
@@ -219,51 +223,57 @@ describe("observability (server)", () => {
 
       trackServerEvent("evento_test", { stage: "ia" });
 
-      expect(posthogCapture).not.toHaveBeenCalled();
+      expect(posthogFetch).not.toHaveBeenCalled();
       expect(spy).toHaveBeenCalled();
       spy.mockRestore();
     });
 
-    it("con key inicializa PostHog con flush inmediato", async () => {
-      vi.stubEnv("VITE_POSTHOG_KEY", KEY);
-      const { initServerObservability } = await cargarObservability();
-
-      initServerObservability();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      expect(posthogConstructor).toHaveBeenCalledWith(KEY, {
-        host: "https://us.i.posthog.com",
-        flushAt: 1,
-        flushInterval: 0,
-      });
-    });
-
-    it("con key emite el evento con las propiedades saneadas", async () => {
+    it("con key manda el evento al endpoint de capture con las propiedades saneadas", async () => {
       vi.stubEnv("VITE_POSTHOG_KEY", KEY);
       const { FUNNEL, trackServerEvent } = await cargarObservability();
 
       trackServerEvent(FUNNEL.limiteDiario, { limite: 2, email: "jack@example.com" });
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(posthogCapture).toHaveBeenCalledWith({
-        distinctId: "postulaya-server",
+      expect(posthogFetch).toHaveBeenCalledTimes(1);
+      const [url, init] = posthogFetch.mock.calls[0] ?? [];
+      expect(url).toBe("https://us.i.posthog.com/capture/");
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(init?.body as string)).toEqual({
+        api_key: KEY,
+        distinct_id: "postulaya-server",
         event: "funnel_limite_diario",
         properties: { limite: 2, email: "[REDACTED]" },
       });
     });
 
-    it("no reenvía nada si el host custom viene mal", async () => {
+    it("manda el evento al host custom de VITE_POSTHOG_HOST", async () => {
       vi.stubEnv("VITE_POSTHOG_KEY", KEY);
       vi.stubEnv("VITE_POSTHOG_HOST", "https://ph.example.com");
-      const { initServerObservability } = await cargarObservability();
+      const { trackServerEvent } = await cargarObservability();
 
-      initServerObservability();
+      trackServerEvent("evento_test", {});
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(posthogConstructor).toHaveBeenCalledWith(
-        KEY,
-        expect.objectContaining({ host: "https://ph.example.com" }),
+      expect(posthogFetch).toHaveBeenCalledWith(
+        "https://ph.example.com/capture/",
+        expect.anything(),
       );
+    });
+
+    it("no rompe el request si PostHog devuelve un error", async () => {
+      vi.stubEnv("VITE_POSTHOG_KEY", KEY);
+      stubPosthog(500, "boom");
+      const { trackServerEvent } = await cargarObservability();
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      trackServerEvent("evento_test", {});
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // El error se traga por el .catch() del track; el caller nunca lo ve.
+      expect(posthogFetch).toHaveBeenCalledTimes(1);
+      expect(errorSpy).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
     });
 
     it("usa el waitUntil del AsyncLocalStorage cuando no llega ctx explícito", async () => {
@@ -281,11 +291,12 @@ describe("observability (server)", () => {
       // Sin el requestContext, este evento se perdería: el call site (una server
       // fn) no tiene acceso al ctx de Cloudflare y caería en fire-and-forget.
       expect(promesas).toHaveLength(1);
-      expect(posthogCapture).toHaveBeenCalledWith({
-        distinctId: "postulaya-server",
-        event: "funnel_gmail_enviado",
-        properties: { limite: 2 },
-      });
+      expect(posthogFetch).toHaveBeenCalledWith(
+        "https://us.i.posthog.com/capture/",
+        expect.objectContaining({
+          body: expect.stringContaining('"funnel_gmail_enviado"'),
+        }),
+      );
     });
   });
 
@@ -301,7 +312,7 @@ describe("observability (server)", () => {
     reportServerError(new Error("boom"), { stage: "ia" });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(posthogCapture).not.toHaveBeenCalled();
+    expect(posthogFetch).not.toHaveBeenCalled();
     expect(infoSpy).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
     infoSpy.mockRestore();

@@ -5,7 +5,6 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import {
-  initServerObservability,
   reportServerError,
   requestContext,
   sentryWorkerOptions,
@@ -60,9 +59,6 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default Sentry.withSentry(() => sentryWorkerOptions(), {
   async fetch(request: Request, env: unknown, ctx: WaitUntilContext) {
-    // Sin VITE_POSTHOG_KEY es un no-op. Con la key presente precarga el cliente
-    // de PostHog para que el primer evento del request ya lo encuentre listo.
-    initServerObservability();
     try {
       const handler = await getServerEntry();
       // `requestContext` expone el `ctx` (y su `waitUntil`) del isolate a todo lo
