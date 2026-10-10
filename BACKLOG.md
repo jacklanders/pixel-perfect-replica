@@ -549,8 +549,19 @@ ode_modules/tslib ahora es el shim (package name=tslib, main=./index.mjs).
   estático. Alternativa a largo plazo (si Bun cambia interop): publicar 	slib ESM propio o migrar.
 - GO check del usuario: probar el envío con el CV de Jack (sin subir archivo) contra producción.
 
-## [2026-10-10] Sesi�n 1 - Deploy S4 + estado prod
+## [2026-10-10] Sesi�n 1 - Deploy S4 + estado prod
 - CI deploy habilitado (DEPLOY_CLOUDFLARE=true), 4 secrets seteados
 - Deploy exitoso a Workers: bundle contiene 'funnel_login_falla' (S4 deployed)
 - Sentry/PostHog no configurados por ahora (skip)
 - Siguiente: S3 (casos error Gmail reales / verificar Application ? Wages en prod)
+
+## [2026-10-10] Sesion 2 - Claves de observabilidad cargadas (S4)
+- Cuentas creadas: proyecto Sentry (Cloudflare Node) + proyecto PostHog (US Cloud, solo
+  Product Analytics; sin wizard/Data Warehouse).
+- Repository variables cargadas en GitHub: VITE_SENTRY_DSN, VITE_POSTHOG_KEY,
+  VITE_POSTHOG_HOST (https://us.i.posthog.com).
+- Verificado en local con `bun run build`: DSN y phc_ inlineados en el bundle del cliente
+  y en los chunks del server (observability-*.mjs, ssr.mjs).
+- Se dispara el deploy (push) para que CI inline las claves en la build de produccion.
+- Pendiente post-deploy: verificar un error controlado en Sentry y los funnel_* en
+  PostHog -> Activity; despues marcar S4 cerrado.
