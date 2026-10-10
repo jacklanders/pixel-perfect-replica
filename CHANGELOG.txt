@@ -103,3 +103,5 @@ v3.latest — Fix CI e2e (GitHub Actions): collection crash y MOCK_AUTH
 
 ## 2026-09-25 S4 - activacion de observabilidad en produccion
 - Deploy del codigo S4 (a356c52): CI deploy job habilitado (repo variable DEPLOY_CLOUDFLARE=true).
+
+## 2026-09-25 S4 - fix CLOUDFLARE_ACCOUNT_ID (retry deploy)
