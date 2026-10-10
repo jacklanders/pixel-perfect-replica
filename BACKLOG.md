@@ -30,9 +30,10 @@ deploy 21:00; session wrangler OAuth activa para deployear en la próxima).
 Suite: **87 tests ✅ / typecheck ✅ / lint 0 errores ✅ / build ✅**.
 
 ### Siguiente sesión — continuar acá (pendientes Hito 5 / certificación)
-- 🔴 **S2 — Smoke vertical completo del MVP**: se validaron partes (adjunto pdf-lib, cuerpo no vacío,
-  no-atasco por demanda), pero falta el recorrido íntegro login → perfil → CV → aviso → extraer →
-  postular → copiar → Gmail → enviar, + 2ª/3ª operación y **límite diario**.
+- ✅ **S2 — Smoke vertical completo del MVP**: **validado por uso real (2026-10-10)** — el usuario
+  envía mails y genera postulaciones de forma repetida (login → aviso → IA → postular → Gmail →
+  enviar) y conecta/desconecta Gmail. Residual a confirmar: botón copiar, CV en "Mis CV" y límite
+  diario en la 2ª/3ª operación.
 - 🟠 **S3 — Casos de error Gmail reales**: token expirado/revocado, 401, 429, 5xx, envío ambiguo,
   idempotencia (2º envío), adjunto en fallo.
 - 🟠 **S4 — Observabilidad**: setear `VITE_SENTRY_DSN` + `VITE_POSTHOG_KEY` y confirmar eventos
@@ -356,10 +357,14 @@ punta. Registrado a partir del reporte de estado del 18/09 (etapa = certificaci�
       editar perfil → guardar → refresh → datos persisten. Anotar cada bug (S1).
       → **Cerrado 18/09**: login Google real OK, refresh mantiene sesión, perfil guardado
       persiste tras refresh. Sin bugs.
-- [ ] 🔴 **Smoke vertical completo del MVP** — login → perfil → crear CV → guardar → Mis CV →
-      nuevo aviso → IA extrae → generar postulación → detalle → copiar → conectar Gmail → enviar →
-      "Enviada". Probar 2ª/3ª operación y el **límite diario** (el sistema de límites cambió 18/09).
-      Incluye validación funcional de IA real (Hito 2) y recorrido E2E de postulaciones (Hito 3) (S2).
+- [x] 🔴 **Smoke vertical completo del MVP** (S2) — **validado por uso real 2026-10-10**: el usuario
+      viene enviando mails "a mansalva" y generando postulaciones (login → aviso → IA extrae →
+      postular → detalle → conectar Gmail → enviar → "Enviada") y conecta/desconecta Gmail de forma
+      repetida. Cubre el grueso del recorrido, incluida validación funcional de IA real (Hito 2) y
+      recorrido E2E de postulaciones (Hito 3).
+      Residual a confirmar (no observado explícitamente): botón **copiar**, creación/guardado de **CV**
+      en "Mis CV", y el **límite diario** en la 2ª/3ª operación (el sistema de límites cambió 18/09).
+      Si esos también se usaron, S2 queda 100% cerrado.
 - [ ] 🟠 **Casos de error Gmail reales** — desconectado, token expirado, token revocado, 401, 429,
       5xx, envío ambiguo, segundo envío (idempotencia), adjuntos en fallo (S3).
 - [ ] 🟠 **Observabilidad activada** — setear `VITE_SENTRY_DSN` + `VITE_POSTHOG_KEY` y confirmar que
@@ -615,8 +620,9 @@ Queda por confirmar con la prueba sobre `80e1e9c` (ver "▶ RETOMAR ACÁ").
 1. **S4 (cerrar observabilidad)**: confirmar version viva en Cloudflare Deployments; probar
    `80e1e9c` (enviar por Gmail + mirar Logs `[observability:server]` + PostHog Activity
    persona `postulaya-server`); confirmar Sentry server-side. Recien ahi marcar S4 cerrado.
-2. **S2 (smoke vertical completo)**: login → perfil → CV → aviso → extraer → postular →
-   copiar → Gmail → enviar, + 2a/3a operacion + limite diario.
+2. **S2 (smoke vertical completo)**: **VALIDADO por uso real (2026-10-10)** — envio repetido de
+   mails + generacion de postulaciones + conectar/desconectar Gmail. Residual a confirmar: boton
+   copiar, CV en "Mis CV", limite diario en 2a/3a operacion.
 3. **S3 (casos de error Gmail reales)**: token expirado/revocado, 401, 429, 5xx, envio
    ambiguo, idempotencia (2o envio), adjunto en fallo.
 4. **S5 (docs de cierre)**: README + BACKLOG + CHANGELOG al declarar el MVP cerrado.
