@@ -408,33 +408,35 @@ punta. Registrado a partir del reporte de estado del 18/09 (etapa = certificaci�
 --------------------------------------------------------------------------------
 ## S4 — Observabilidad (25/09/2026): instrumentación lista, faltan las claves
 --------------------------------------------------------------------------------
-> ### ▶ RETOMAR ACÁ (25/09, se deja la sesión abierta)
-> **Todo el código está hecho, verificado y pusheado en `a356c52`.** No queda trabajo de
-> código: lo pendiente necesita credenciales del usuario.
-> 1. **Ver el deploy** (quedó sin confirmar): Cloudflare → Workers & Pages → `app` →
->    Deployments. Al dejar la sesión, prod seguía sirviendo la build del 19/09
->    (`/assets/index-vjYYtF5a.js`), o sea que el run de Actions del push `a356c52` no
->    había aterrizado (o falló). Chequeo HTTP para confirmarlo sin `gh` (no hay CLI
->    instalada en la máquina):
->    ```powershell
->    $idx = Invoke-WebRequest "https://app.postulaya-jack.workers.dev/?cb=$([guid]::NewGuid().ToString('N').Substring(0,8))" -UseBasicParsing -Headers @{ 'Cache-Control'='no-store' }
->    $src = ([regex]::Matches($idx.Content,'src="(/assets/[^"]+\.js)"')[0]).Groups[1].Value
->    (Invoke-WebRequest "https://app.postulaya-jack.workers.dev$src" -UseBasicParsing).Content -match 'funnel_login_falla'
->    ```
->    `True` = build nueva en pie. Ese string solo existe en el bundle de este commit.
-> 2. **Crear las cuentas y cargar las claves** (guía completa en el README, sección
->    "Observabilidad"): proyecto en sentry.io → DSN; proyecto en app.posthog.com → key
->    `phc_`. Cargarlas como **repository variables** (Settings → Secrets and variables →
->    Actions → tab *Variables*): `VITE_SENTRY_DSN`, `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST`.
->    Local: `.env.local`.
-> 3. **Un push más** (cualquier cambio trivial sirve) → el job `deploy` rebuilda con las
->    claves inlineadas. Orden importa: las `VITE_*` se inlinean en el build, si el push va
->    antes que las variables sale una build inerte (no rompe nada).
-> 4. **Verificar**: un error controlado (IA caída en "Cargar aviso") → issue en Sentry;
->    los `funnel_*` en PostHog → Activity. Después marcar S4 como cerrado acá.
+> ### ▶ RETOMAR ACÁ (2026-10-10, sesión 3 — S4 sigue abierto, falta confirmar en prod)
+> **Claves de Sentry/PostHog creadas y cargadas; el código de observabilidad está completo
+> y pusheado.** Lo único que falta es CONFIRMAR contra producción, y eso depende del
+> usuario (en la máquina no hay `gh` ni wrangler autenticado). Ver el detalle de la sesión
+> 3 al pie del archivo.
+> Deploys pusheados hoy (cada job `deploy` del CI terminó `success`): `eba0f2d` (claves
+> inlineadas), `d19ff9a` (ALS/waitUntil), `46ba142` (fetch directo a PostHog, reemplaza
+> `posthog-node`), `80e1e9c` (diagnóstico del POST).
+> **NO está confirmado que aterrizaron.** Los traces mirados eran de ANTES de los deploys
+> (04:26–04:30 UTC) con `script_version.id = 9d466417-…` (versión de la era `posthog-node`).
+> OJO: comparar el hash del bundle cliente NO prueba la versión viva — el bundle embebe las
+> `VITE_*`, que difieren entre `.env.local` y las repository variables del CI.
+> 1. **Confirmar la versión viva**: Cloudflare → Workers & Pages → `app` → **Deployments**
+>    (Producción / Latest). ¿Fecha del último deploy? ¿Coincide con los pushes de hoy
+>    (~04:35 y ~05:15 UTC)? Si el último es viejo, el CI no está actualizando prod y hay que
+>    mirar el log del job `deploy` (paso "Deploy a Cloudflare Workers").
+> 2. **Probar el build `80e1e9c`** (el del diagnóstico): enviar una postulación por Gmail y
+>    mirar **Logs** del Worker buscando `[observability:server] …`:
+>    - `envío posthog funnel_gmail_enviado con-waitUntil` (o `sin-waitUntil`)
+>    - `posthog ok funnel_gmail_enviado` → llegó; revisar PostHog → Activity, persona `postulaya-server`.
+>    - `posthog fallo funnel_gmail_enviado` + error → es la causa (también va a Sentry, stage `posthog_capture`).
+>    - Nada de eso → el código no corre (el envío falló antes, o el deploy no aterrizó).
+> 3. Confirmar Sentry server-side con un error controlado (IA caída en "Cargar aviso").
+> 4. Con los eventos de server confirmados → marcar S4 cerrado (aquí y en "Certificación").
 >
-> Pendientes del backlog que siguen abiertos, en orden: S3 (verificar `Application ↔
-> Wages` en producción) y S5.
+> Hipótesis del usuario (2026-10-10): que los eventos "no llegaban" fue por no recargar la
+> página, no por un bug. **Sin confirmar** — el punto 2 lo define.
+> Pendientes abiertos, en orden: S2 (smoke vertical completo), S3 (errores Gmail reales),
+> S5 (docs de cierre) y decidir Vercel.
 
 Estado: **código completo y en verde** (typecheck/lint/120 tests/build), commit `a356c52`
 pusheado; **deploy sin confirmar**.
@@ -565,3 +567,59 @@ ode_modules/tslib ahora es el shim (package name=tslib, main=./index.mjs).
 - Se dispara el deploy (push) para que CI inline las claves en la build de produccion.
 - Pendiente post-deploy: verificar un error controlado en Sentry y los funnel_* en
   PostHog -> Activity; despues marcar S4 cerrado.
+
+## [2026-10-10] Sesion 3 - Eventos del server no llegan: diagnostico y fixes (S4)
+Contexto: tras cargar las claves, los eventos de CLIENTE llegan a PostHog (funnel_login_ok,
+funnel_extraer_ok, funnel_postulacion_generada, pageviews, web vitals) pero los del SERVER
+(`funnel_gmail_enviado`, `gmail_conectado`, persona `postulaya-server`) NO aparecen.
+
+### Causa raiz encontrada (commit `46ba142`)
+`posthog-node` `capture()` NO es async: encola el evento y dispara el flush por dentro
+(fire-and-forget). La promesa que registrabamos con `waitUntil` se resolvia ANTES de mandar
+el HTTP, asi que al congelarse el isolate el evento se perdia. Confirmado leyendo
+`.output/server/_libs/posthog-node.mjs` (`_capturePreparedEvent(props, false)` → `enqueue`).
+Fix: eliminar `posthog-node` (dep + `bun install`) y mandar el evento con `fetch` directo a
+`POST {VITE_POSTHOG_HOST}/capture/` con body `{ api_key, distinct_id: "postulaya-server",
+event, properties }`. Ahora la promesa ES el POST: si `waitUntil` la sostiene, el evento llega.
+
+### Instrumentacion de diagnostico (commit `80e1e9c`)
+Como todo fallo de telemetria se tragaba en silencio (`track()` → `.catch(() => undefined)`),
+se agrego logging al POST: en el **Logs** del Worker queda si se anclo al isolate
+(`waitUntil`) o no, y el resultado (`posthog ok`) o el error exacto (`posthog fallo`); ademas
+los fallos se reportan a Sentry con `stage: "posthog_capture"`. Nunca rompe el request.
+Antes: `d19ff9a` intento anclar con `AsyncLocalStorage` (`requestContext` en `src/server.ts`
++ `trackServerEvent` lee el `ctx` del request); no alcanzo porque el bug de fondo era el
+flush de la SDK, no el anclaje.
+
+### Estado de los deploys (SIN CONFIRMAR)
+Los 4 commits de hoy se pushearon y cada job `deploy` del CI termino `success`
+(runs 38023126086, 38024574512, 38026899031). PERO no esta probado que aterrizaron: los
+traces que el usuario miro eran de 04:26–04:30 UTC (ANTES del deploy de `46ba142`, 04:35 UTC)
+y mostraban `cloudflare.script_version.id = 9d466417-1f72-4bd1-b80b-497d597b9fc1` (era
+`posthog-node`). Dato util del trace: `account = b1bb86df1a07d1ca56347fe4f3ced499` (coincide
+con la account del CI, descarta "cuenta equivocada").
+OJO: comparar el hash del bundle cliente (`index-*.js`) NO sirve para saber la version viva,
+porque el bundle del cliente embebe las `VITE_*` y esas difieren entre `.env.local` (local) y
+las repository variables (CI) → hashes distintos aunque el codigo sea el mismo.
+
+### Verificacion (suite)
+typecheck OK; lint 0 errores (3 warnings pre-existentes de react-refresh en ThemeSwitcher/
+ToolLogos); **121 tests** en 15 archivos; build OK. Sin `posthog-node` en el bundle del server.
+Working tree limpio; todo commiteado y pusheado.
+
+### Hipotesis del usuario (2026-10-10, sin confirmar)
+El usuario cree que la no-llegada era por no recargar/actualizar la pagina, no por otro bug.
+Queda por confirmar con la prueba sobre `80e1e9c` (ver "▶ RETOMAR ACÁ").
+
+### Que queda para cerrar el MVP (resumen)
+1. **S4 (cerrar observabilidad)**: confirmar version viva en Cloudflare Deployments; probar
+   `80e1e9c` (enviar por Gmail + mirar Logs `[observability:server]` + PostHog Activity
+   persona `postulaya-server`); confirmar Sentry server-side. Recien ahi marcar S4 cerrado.
+2. **S2 (smoke vertical completo)**: login → perfil → CV → aviso → extraer → postular →
+   copiar → Gmail → enviar, + 2a/3a operacion + limite diario.
+3. **S3 (casos de error Gmail reales)**: token expirado/revocado, 401, 429, 5xx, envio
+   ambiguo, idempotencia (2o envio), adjunto en fallo.
+4. **S5 (docs de cierre)**: README + BACKLOG + CHANGELOG al declarar el MVP cerrado.
+5. **Decidir Vercel** (solo decidir; si el dolor es el dominio largo → dominio custom en
+   Cloudflare Workers sin migrar).
+6. Post-MVP: **multi-CV** con sugerencia segun la vacante.
