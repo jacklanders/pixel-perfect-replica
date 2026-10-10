@@ -33,6 +33,11 @@ describe("observability (server)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+    // Partir de "sin observabilidad" aunque .env.local tenga claves reales: los
+    // tests deciden con stubEnv cuándo hay DSN/key (process.env gana a .env).
+    vi.stubEnv("VITE_SENTRY_DSN", undefined);
+    vi.stubEnv("VITE_POSTHOG_KEY", undefined);
+    vi.stubEnv("VITE_POSTHOG_HOST", undefined);
   });
 
   afterEach(() => {
@@ -259,6 +264,28 @@ describe("observability (server)", () => {
         KEY,
         expect.objectContaining({ host: "https://ph.example.com" }),
       );
+    });
+
+    it("usa el waitUntil del AsyncLocalStorage cuando no llega ctx explícito", async () => {
+      vi.stubEnv("VITE_POSTHOG_KEY", KEY);
+      const { requestContext, trackServerEvent } = await cargarObservability();
+
+      const promesas: Promise<unknown>[] = [];
+      const ctx = { waitUntil: (p: Promise<unknown>) => promesas.push(p) };
+
+      await requestContext.run(ctx, async () => {
+        trackServerEvent("funnel_gmail_enviado", { limite: 2 });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      // Sin el requestContext, este evento se perdería: el call site (una server
+      // fn) no tiene acceso al ctx de Cloudflare y caería en fire-and-forget.
+      expect(promesas).toHaveLength(1);
+      expect(posthogCapture).toHaveBeenCalledWith({
+        distinctId: "postulaya-server",
+        event: "funnel_gmail_enviado",
+        properties: { limite: 2 },
+      });
     });
   });
 

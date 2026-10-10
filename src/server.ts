@@ -7,6 +7,7 @@ import { renderErrorPage } from "./lib/error-page";
 import {
   initServerObservability,
   reportServerError,
+  requestContext,
   sentryWorkerOptions,
   type WaitUntilContext,
 } from "./lib/server/observability";
@@ -64,7 +65,11 @@ export default Sentry.withSentry(() => sentryWorkerOptions(), {
     initServerObservability();
     try {
       const handler = await getServerEntry();
-      const response = await handler.fetch(request, env, ctx);
+      // `requestContext` expone el `ctx` (y su `waitUntil`) del isolate a todo lo
+      // que corra dentro de este request, incluidas las server fns a las que el
+      // runtime no les pasa el contexto de Cloudflare. Sin esto, un evento de
+      // telemetría emitido en una server fn se pierde al congelarse el isolate.
+      const response = await requestContext.run(ctx, () => handler.fetch(request, env, ctx));
       return await normalizeCatastrophicSsrResponse(response, ctx);
     } catch (error) {
       console.error(error);

@@ -35,6 +35,11 @@ describe("observability (cliente)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+    // Partir de "sin observabilidad" aunque .env.local tenga claves reales: los
+    // tests deciden con stubEnv cuándo hay DSN/key (process.env gana a .env).
+    vi.stubEnv("VITE_SENTRY_DSN", undefined);
+    vi.stubEnv("VITE_POSTHOG_KEY", undefined);
+    vi.stubEnv("VITE_POSTHOG_HOST", undefined);
   });
 
   afterEach(() => {

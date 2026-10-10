@@ -17,6 +17,7 @@
  * browser nunca ve el detalle real).
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { CloudflareOptions, ErrorEvent } from "@sentry/cloudflare";
 
 /**
@@ -38,6 +39,15 @@ const posthogHost = readViteEnv("VITE_POSTHOG_HOST") ?? "https://us.i.posthog.co
 
 /** `ctx` de Cloudflare, para que un evento no se pierda al congelarse el isolate. */
 export type WaitUntilContext = { waitUntil?: (promise: Promise<unknown>) => void };
+
+/**
+ * Contexto del request con `waitUntil` disponible para todo lo que corra dentro
+ * de un fetch del worker. Lo puebla `src/server.ts` al entrar el request; así
+ * los eventos que se emiten desde una server fn (cuyo call site no tiene acceso
+ * al `ctx` de Cloudflare) igual pueden anclarse al isolate con `waitUntil` y no
+ * perderse cuando el isolate se congela.
+ */
+export const requestContext = new AsyncLocalStorage<WaitUntilContext>();
 
 type PropertyValue = string | number | boolean;
 
@@ -141,9 +151,12 @@ export function initServerObservability(): void {
 }
 
 function track(promise: Promise<unknown>, ctx?: WaitUntilContext): void {
-  if (ctx?.waitUntil) {
+  // Si el call site no tiene ctx (server fn), lo toma del AsyncLocalStorage que
+  // pobló src/server.ts al entrar el request del worker.
+  const current = ctx ?? requestContext.getStore();
+  if (current?.waitUntil) {
     try {
-      ctx.waitUntil(promise.catch(() => undefined));
+      current.waitUntil(promise.catch(() => undefined));
       return;
     } catch {
       // si waitUntil falla (contexto sin isolate), cae al fire-and-forget
