@@ -100,3 +100,6 @@ v3.latest — Fix CI e2e (GitHub Actions): collection crash y MOCK_AUTH
   que no tiene Supabase real ni e2e/.auth/user.json). auth.setup.ts queda fuera
   del runner (testMatch es `*.e2e.ts`).
 
+
+## 2026-09-25 S4 - activacion de observabilidad en produccion
+- Deploy del codigo S4 (a356c52): CI deploy job habilitado (repo variable DEPLOY_CLOUDFLARE=true).
