@@ -548,3 +548,9 @@ ode_modules/tslib ahora es el shim (package name=tslib, main=./index.mjs).
 - No borrar deps/tslib-esm/ ni el overrides hasta cerrar: es la pieza que hace el named-import
   estático. Alternativa a largo plazo (si Bun cambia interop): publicar 	slib ESM propio o migrar.
 - GO check del usuario: probar el envío con el CV de Jack (sin subir archivo) contra producción.
+
+## [2026-10-10] Sesi�n 1 - Deploy S4 + estado prod
+- CI deploy habilitado (DEPLOY_CLOUDFLARE=true), 4 secrets seteados
+- Deploy exitoso a Workers: bundle contiene 'funnel_login_falla' (S4 deployed)
+- Sentry/PostHog no configurados por ahora (skip)
+- Siguiente: S3 (casos error Gmail reales / verificar Application ? Wages en prod)
