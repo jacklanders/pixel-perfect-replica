@@ -12,8 +12,9 @@ No implementar nada de esto durante Fases 1 y 2 / Hitos 0–5, salvo decisión e
   smoke real con Gmail (token revocado/429). **S4** (confirmar eventos server en producción),
   **S5** (docs de cierre) y **decidir Vercel**. Post-MVP: **multi-CV**.
 - **Acciones de postulaciones (2026-11-04)**: duplicar, pausar/reanudar, descartar y eliminar
-  implementadas en detalle + historial; falta aplicar `0016_application_actions.sql` en el Cloud
-  y hacer el smoke funcional (la migración agrega `paused` y el permiso de DELETE).
+  implementadas en detalle + historial. **Pendiente para la próxima sesión**: aplicar
+  `0016_application_actions.sql` en el SQL Editor del Cloud (agrega `paused` y el permiso de
+  DELETE) y hacer el smoke funcional.
 - Los ítems 1–13 de la lista numerada ya están cerrados y verificados en código; solo sigue abierto
   el 14 (Vercel). Ver "Pendientes activos — lista numerada".
 
@@ -606,7 +607,8 @@ Queda por confirmar con la prueba sobre `80e1e9c` (ver "▶ RETOMAR ACÁ").
    Gmail.
 3. **S3 (casos de error Gmail reales)**: matriz de unit tests cerrada y 2 fixes (retry transitorio
    exacto + limpieza de adjunto temporal). Falta el smoke con Gmail real (token revocado/429).
-   Aplicar también `0016_application_actions.sql` y probar duplicar/pausar/reanudar/eliminar.
+   **Próxima sesión**: aplicar `0016_application_actions.sql` en el Cloud y probar
+   duplicar/pausar/reanudar/eliminar.
 4. **S5 (docs de cierre)**: README + BACKLOG + CHANGELOG al declarar el MVP cerrado.
 5. **Decidir Vercel** (solo decidir; si el dolor es el dominio largo → dominio custom en
    Cloudflare Workers sin migrar).
@@ -638,5 +640,6 @@ Queda por confirmar con la prueba sobre `80e1e9c` (ver "▶ RETOMAR ACÁ").
 - **Descartar**: disponible en pendientes y pausadas (se mantiene el motivo existente).
 - **UI**: menú "Acciones" en el detalle y menú ⋯ en cada tarjeta del historial.
 - **DB**: `supabase/migrations/0016_application_actions.sql` (check de `status` con `paused`,
-  policy/grant de DELETE). **Pendiente de aplicar en el SQL Editor del Cloud.**
+  policy/grant de DELETE). **Queda pendiente para la próxima sesión**: aplicarla en el SQL Editor
+  del Cloud y probar el flujo completo.
 - **Verificación**: 129 tests ✅ / typecheck ✅ / lint 0 errores ✅ / build ✅.
