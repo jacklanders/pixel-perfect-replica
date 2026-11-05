@@ -184,10 +184,13 @@ async function sendGmailWithRetry(
   } catch (err) {
     if (err instanceof GmailApiError && err.status === 401) {
       const newToken = await forceRefreshAccessToken(userId, supabase);
-      return await sendWithTransientRetry(() => sendGmailRaw(newToken, rawBase64Url));
+      // Ya gastamos el único retry en el refresh: el intento con el token nuevo
+      // no vuelve a reintentar (maxRetries = 0).
+      return await sendWithTransientRetry(() => sendGmailRaw(newToken, rawBase64Url), 0);
     }
     if (err instanceof GmailApiError && TRANSIENT_STATUS(err.status)) {
-      return await sendWithTransientRetry(() => sendGmailRaw(accessToken, rawBase64Url));
+      // 1 intento inicial + 1 retry con backoff (maxRetries = 0 en el helper).
+      return await sendWithTransientRetry(() => sendGmailRaw(accessToken, rawBase64Url), 0);
     }
     throw err;
   }
@@ -332,35 +335,36 @@ export async function enviarPostulacionGmail(
     body: options.body,
   });
 
-  // 1. Obtener adjunto: archivo temporal (PDF/DOCX subido) o CV guardado
-  let attachment: { filename: string; mimeType: string; bytes: Uint8Array } | null = null;
-  if (options.adjunto) {
-    attachment = await obtenerAdjuntoArchivo(options.adjunto, supabase);
-  } else {
-    attachment = await obtenerCvAttachment(options.userId, options.resumeId, supabase);
-  }
-
-  // 2. Armar MIME
-  const mimeMessage = buildMimeMessage({
-    from: options.fromEmail,
-    to: options.toEmail,
-    subject: options.subject,
-    body: options.body,
-    ...(attachment ? { attachment } : {}),
-    ...(options.includeCopy ? { bcc: options.fromEmail } : {}),
-  });
-
-  // 3. Codificar a base64url
-  const rawBase64Url = toBase64Url(utf8ToBase64(mimeMessage));
-
-  // 4. Enviar vía Gmail API (con retry por refresh)
-  let result: Awaited<ReturnType<typeof sendGmailWithRetry>>;
   try {
-    result = await sendGmailWithRetry(options.userId, rawBase64Url, supabase);
+    // 1. Obtener adjunto: archivo temporal (PDF/DOCX subido) o CV guardado
+    let attachment: { filename: string; mimeType: string; bytes: Uint8Array } | null = null;
+    if (options.adjunto) {
+      attachment = await obtenerAdjuntoArchivo(options.adjunto, supabase);
+    } else {
+      attachment = await obtenerCvAttachment(options.userId, options.resumeId, supabase);
+    }
+
+    // 2. Armar MIME
+    const mimeMessage = buildMimeMessage({
+      from: options.fromEmail,
+      to: options.toEmail,
+      subject: options.subject,
+      body: options.body,
+      ...(attachment ? { attachment } : {}),
+      ...(options.includeCopy ? { bcc: options.fromEmail } : {}),
+    });
+
+    // 3. Codificar a base64url
+    const rawBase64Url = toBase64Url(utf8ToBase64(mimeMessage));
+
+    // 4. Enviar vía Gmail API (con retry por refresh)
+    const result = await sendGmailWithRetry(options.userId, rawBase64Url, supabase);
+
+    return { messageId: result.id };
   } finally {
-    // 5. Limpiar adjunto temporal SIEMPRE (éxito o fallo del envío): un archivo
-    // huérfano en `resumes/{user}/tmp/` por un envío fallido no se borraría
-    // solo (el cleanup definitivo por TTL aún no existe).
+    // 5. Limpiar adjunto temporal SIEMPRE (éxito, fallo del envío, lectura
+    // fallida o validación de tamaño): un archivo huérfano en
+    // `resumes/{user}/tmp/` no se borraría solo (el cleanup por TTL aún no existe).
     if (options.adjunto) {
       await supabase.storage
         .from("resumes")
@@ -368,6 +372,4 @@ export async function enviarPostulacionGmail(
         .catch(() => {});
     }
   }
-
-  return { messageId: result.id };
 }

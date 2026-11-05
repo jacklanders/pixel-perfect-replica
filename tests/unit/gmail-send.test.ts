@@ -241,6 +241,94 @@ describe("enviarPostulacionGmail", () => {
     expect(updateOp).toBeUndefined();
   });
 
+  it("reintenta con backoff ante un 429 (rate limit) sin tocar el token", async () => {
+    client.handlers["resumes"] = () => rowResult(RESUMEN_GENERADO);
+
+    const gmailStatuses = [429, 200];
+    fetchStub.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.includes("gmail.googleapis.com")) {
+        const status = gmailStatuses.shift() ?? 200;
+        return fakeResponse(status, status === 200 ? { id: "m-429" } : "Too Many Requests");
+      }
+      throw new Error(`URL inesperada: ${url}`);
+    });
+
+    const result = await enviarPostulacionGmail({
+      userId: "user-1",
+      fromEmail: "juan@test.com",
+      toEmail: "rrhh@empresa.com",
+      subject: "Postulación",
+      body: "Hola",
+      resumeId: "res-jack",
+      includeCopy: false,
+      adjunto: null,
+    });
+
+    expect(result.messageId).toBe("m-429");
+    const gmail = gmailCalls();
+    expect(gmail).toHaveLength(2);
+    expect(bearerOf(gmail[0]!)).toBe("Bearer access-valid");
+    expect(bearerOf(gmail[1]!)).toBe("Bearer access-valid");
+  });
+
+  it("si el error transitorio persiste, se agota el retry y propaga el status (503)", async () => {
+    client.handlers["resumes"] = () => rowResult(RESUMEN_GENERADO);
+    fetchStub.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.includes("gmail.googleapis.com")) return fakeResponse(503, "Service Unavailable");
+      throw new Error(`URL inesperada: ${url}`);
+    });
+
+    await expect(
+      enviarPostulacionGmail({
+        userId: "user-1",
+        fromEmail: "juan@test.com",
+        toEmail: "rrhh@empresa.com",
+        subject: "Postulación",
+        body: "Hola",
+        resumeId: "res-jack",
+        includeCopy: false,
+        adjunto: null,
+      }),
+    ).rejects.toMatchObject({ name: "GmailApiError", status: 503 });
+
+    // 1 intento + 1 retry (maxRetries = 1): no se reintenta indefinidamente.
+    expect(gmailCalls()).toHaveLength(2);
+  });
+
+  it("si tras el refresh Gmail vuelve a responder 401, no reintenta más y propaga el 401", async () => {
+    client.handlers["resumes"] = () => rowResult(RESUMEN_GENERADO);
+
+    let tokenCalls = 0;
+    fetchStub.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.includes("gmail.googleapis.com")) return fakeResponse(401, "Unauthorized");
+      if (url.includes("oauth2.googleapis.com/token")) {
+        tokenCalls++;
+        return fakeResponse(200, { access_token: "access-refreshed", expires_in: 3600 });
+      }
+      throw new Error(`URL inesperada: ${url}`);
+    });
+
+    await expect(
+      enviarPostulacionGmail({
+        userId: "user-1",
+        fromEmail: "juan@test.com",
+        toEmail: "rrhh@empresa.com",
+        subject: "Postulación",
+        body: "Hola",
+        resumeId: "res-jack",
+        includeCopy: false,
+        adjunto: null,
+      }),
+    ).rejects.toMatchObject({ name: "GmailApiError", status: 401 });
+
+    // Un solo refresh y dos llamadas a Gmail (original + retry con token nuevo).
+    expect(tokenCalls).toBe(1);
+    expect(gmailCalls()).toHaveLength(2);
+  });
+
   it("valida los inputs y falla con mensaje claro sin tocar la red ni la DB", async () => {
     client.handlers["resumes"] = () => rowResult(RESUMEN_GENERADO);
     const gmail = vi.fn();
@@ -325,8 +413,43 @@ describe("enviarPostulacionGmail", () => {
     expect(removidos).toEqual([["/user-1/tmp/adjunto-e2e.pdf"]]);
   });
 
-  it("si el archivo adjunto no se puede leer de Storage, falla con mensaje claro", async () => {
+  it("si el envío por Gmail falla, igual borra el adjunto temporal de Storage", async () => {
+    client.downloadHandler = async () =>
+      rowResult(blobFrom(new TextEncoder().encode("%PDF-1.4 temp")));
+    const removidos: string[][] = [];
+    client.removeHandler = async (paths) => {
+      removidos.push(paths);
+      return { error: null };
+    };
+    fetchStub.mockResolvedValue(fakeResponse(403, "insufficient scopes"));
+
+    await expect(
+      enviarPostulacionGmail({
+        userId: "user-1",
+        fromEmail: "juan@test.com",
+        toEmail: "rrhh@empresa.com",
+        subject: "Postulación",
+        body: "Hola",
+        resumeId: null,
+        includeCopy: false,
+        adjunto: {
+          storagePath: "/user-1/tmp/adjunto-fallido.pdf",
+          fileName: "adjunto-fallido.pdf",
+          mimeType: "application/pdf",
+        },
+      }),
+    ).rejects.toMatchObject({ name: "GmailApiError", status: 403 });
+
+    expect(removidos).toEqual([["/user-1/tmp/adjunto-fallido.pdf"]]);
+  });
+
+  it("si el archivo adjunto no se puede leer de Storage, falla con mensaje claro y limpia el temporal", async () => {
     client.downloadHandler = async () => errResult("object not found");
+    const removidos: string[][] = [];
+    client.removeHandler = async (paths) => {
+      removidos.push(paths);
+      return { error: null };
+    };
     fetchStub.mockResolvedValue(fakeResponse(200, { id: "x" }));
 
     await expect(
@@ -345,6 +468,8 @@ describe("enviarPostulacionGmail", () => {
         },
       }),
     ).rejects.toThrow("No se pudo leer el archivo adjuntado");
+
+    expect(removidos).toEqual([["/user-1/tmp/extraviado.pdf"]]);
   });
 
   it("con MOCK_GMAIL=true fuera de producción devuelve el messageId mock sin llamar a la API", async () => {
