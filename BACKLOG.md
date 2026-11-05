@@ -2,6 +2,21 @@
 
 No implementar nada de esto durante Fases 1 y 2 / Hitos 0–5, salvo decisión explícita en contrario.
 
+## Estado actual (2026-11-04)
+
+- `main` local sincronizado con GitHub en `9fa8396` (estaba 41 commits atrás; fast-forward limpio).
+- CI verificado vía API de GitHub: los últimos 8 runs (`b91ac2d` → `9fa8396`) terminaron `success`
+  en `build-and-test`, `e2e` y `deploy` (incluye los deploys de S4: `eba0f2d`, `d19ff9a`, `46ba142`
+  y `80e1e9c`).
+- **S2 cerrado** por uso real. **S3**: código y matriz de tests completa (2026-11-04); falta el
+  smoke real con Gmail (token revocado/429). **S4** (confirmar eventos server en producción),
+  **S5** (docs de cierre) y **decidir Vercel**. Post-MVP: **multi-CV**.
+- **Acciones de postulaciones (2026-11-04)**: duplicar, pausar/reanudar, descartar y eliminar
+  implementadas en detalle + historial; falta aplicar `0016_application_actions.sql` en el Cloud
+  y hacer el smoke funcional (la migración agrega `paused` y el permiso de DELETE).
+- Los ítems 1–13 de la lista numerada ya están cerrados y verificados en código; solo sigue abierto
+  el 14 (Vercel). Ver "Pendientes activos — lista numerada".
+
 ## Fuera de alcance por decisión de producto (ver prompt completo)
 
 - **Fase 3** — Búsqueda automática de avisos (scraping/API de portales de empleo).
@@ -289,62 +304,28 @@ Sesión 100% frontend/UI (sin backend ni e2e). `origin/main` quedó en `b3093d9`
   - `chart.tsx` configura `THEMES` con selector `.dark`: para dark/ayu se hace toggle de la clase
     `.dark` en `<html>`, así los `dark:` utilities siguen calzando.
 
-## Pendientes activos — lista numerada (última actualización 13/09/2026)
+## Pendientes activos — lista numerada (última actualización 2026-11-04)
 
-Acceso rápido a los pendientes abiertos del fuerde alcance, mejoras y CI. Cada ítem tiene su detalle
-completo en las secciones de arriba; esta lista los resume y prioriza.
+Acceso rápido a los pendientes abiertos. Cada ítem tiene su detalle completo en las secciones de
+arriba; esta lista los resume y prioriza.
 
-1. **Supabase local vs Cloud** — **CERRADO 15/09**: Cloud es la fuente de verdad; el Docker local
-   (`config.toml`) queda solo como espejo opcional (ver sección "Pendientes técnicos no bloqueantes
-   (fix del 18/08…)" y `CLAUDE.md` → Stack).
-2. **Redirect URLs de login** — **CERRADO 15/09**: verificadas en Supabase Auth → URL Configuration
-   y en Google Cloud Console (Authorized redirect URIs del client: Supabase + Gmail prod + Gmail local;
-   ver sección "Pendientes técnicos no bloqueantes (fix del 18/08…)").
-3. **Seed del admin** — **CERRADO 15/09**: `user_roles` no existía en el Cloud real (0004 sin aplicar);
-   se creó tabla + `has_role()` y se promovió a admin `juliocesarvelozo@gmail.com` vía insert con
-   `service_role` en el SQL Editor.
-4. **Landing: rebranding "PostulaYa! JACK" + logos de herramientas** — **CERRADO 13/09**: títulos y
-   footer a "PostulaYa! JACK", logos movidos al pie en el mismo orden y logo de Lovable sumado a la
-   fila de IAs (ver sección "UI — pendientes de interfaz").
-5. **`login.tsx` ignora el `redirect`** que manda `_authenticated/route.tsx` — siempre cae a
-   `/perfil` tras el login (mejora de UX, no bug). → **CERRADO 18/09**: flujo redirect completo en el
-   guard → login → callback (ver sección "fix del 18/08").
-6. **Edición de avatar ("Cambiar foto")** no implementada — Hito 1 solo muestra el avatar de Google.
-   → **CERRADO 18/09**: `subirAvatar`/`quitarAvatar` + bucket `avatars` + botones en `perfil.tsx`
-   (ver "Pendientes Hito 1").
-7. **`firma_mail` textarea libre** — decidir si se autogenera desde los otros campos o queda 100%
-   editable a mano (Hito 1). → **CERRADO 18/09**: editable con fallback a `firmaSugerida` y botón
-   "Restaurar firma sugerida" (ver "Pendientes Hito 1").
-8. **Unificar el alta de perfil** — trigger (`0002`) + insert de fallback en `getMiPerfil` son
-   redundantes (fix del 18/08). → **CERRADO 18/09**: `0013_unify_profile_creation.sql` deja el
-   trigger solo para `user_roles`; el alta de `profiles` queda en `getMiPerfil` (único creador).
-   Cloud aplicado 18/09.
-9. **`profiles.avatar_url` / `profiles.skills`** — decidir si se usan o se eliminan (hoy todo va a
-   `preferencias` jsonb) — `avatar_url` ya se usa; sigue pendiente la decisión de `skills`.
-   → **CERRADO 18/09**: `skills` (y `resumen`) pasan a columnas reales con backfill
-   (`0014_profile_skills_resumen_columns.sql`); de paso se arregló que el save del `/perfil`
-   descartara ambos campos. `src/lib/server/profile.ts` (getMyProfile/updateMyProfile) — dead code —
-   se eliminó. Cloud aplicado 18/09.
-10. **`bun run test:e2e` de login sin mockear Supabase Auth** — agrega un mock de auth para no
-     depender de Google real en CI (Hito 1). → **CERRADO 18/09**: el mock de auth es `MOCK_AUTH=true`
-     (inyecta `test@jack.local` vía `requireSupabaseAuth`); e2e verificado en modo mock sin Google
-     (ver "Pendientes Hito 1").
-11. **`e2e/auth.setup.ts` es dead code** — borrar o cablear el setup de auth en `projects` (CI,
-     cleanup opcional). → **CERRADO 18/09**: archivo eliminado; `testMatch: *.e2e.ts` nunca lo corría
-     y el `storageState` no estaba cableado. El criterio de auth real queda en `MOCK_AUTH=false`.
-12. **Assets de ícono PWA reales** (192x192 y 512x512, maskable) — hoy apunta a favicon como
-     placeholder (Hito 0). → **CERRADO 18/09**: los tres PNGs existen en `public/` y el manifest los
-     referencia (ver "Pendientes Hito 0").
-13. **Smoke test real: login con Google end-to-end**, incluyendo refresh de página
-    logueado (ya estaba listado en "Pendientes Hito 1"; se consolida acá).
-    → **Revisado 18/09**: se hace con Google real contra **producción** (Cloud es fuente de
-    verdad), no con Docker local — ver sección "Certificación del MVP" abajo.
-14. **Evaluar migración de Cloudflare Workers → Vercel** — preset `vercel` de Nitro, env vars sin
-    cambio de nombres, reconfigurar Google OAuth + Supabase URLs con el dominio nuevo y chequear el
-    header de rate-limit. Detalle en la sección "Migración a Vercel" de arriba.
+1. **S3 — Casos de error Gmail** — matriz de unit tests cerrada y 2 fixes (retry transitorio exacto
+   y limpieza del adjunto temporal); falta el smoke real con Gmail (token revocado/429). Detalle en
+   "S3 — avance 2026-11-04" y "Certificación del MVP".
+2. **S4 — Observabilidad activada** — claves ya cargadas y código completo; falta confirmar en
+   producción la versión viva, los `funnel_*` del server en PostHog (persona `postulaya-server`) y un
+   error controlado en Sentry (ver "S4 — Observabilidad" y "▶ RETOMAR ACÁ").
+3. **S5 — Documentación de cierre** — README + BACKLOG + CHANGELOG al declarar el MVP cerrado.
+4. **Decidir Vercel** — solo decisión; si el dolor es el dominio largo, un dominio custom en
+   Cloudflare Workers lo resuelve sin migrar (ver "Migración a Vercel").
+5. Post-MVP: **multi-CV** con sugerencia de cuál usar según la vacante ("Mejoras evaluadas para
+   después del MVP").
 
-Además, post-MVP (sin checkbox): guardar más de una versión de CV y que Jack sugiera cuál usar
-según el tipo de vacante ("Mejoras evaluadas para después del MVP").
+**Cerrados y verificados (histórico):** 1 Supabase local vs Cloud, 2 Redirect URLs de login, 3 Seed
+del admin, 4 Rebranding landing + logos, 5 Redirect en login, 6 Edición de avatar, 7 `firma_mail`,
+8 Alta de perfil unificada, 9 `avatar_url`/`skills` en columnas reales, 10 Mock de Supabase Auth en
+e2e, 11 `e2e/auth.setup.ts` eliminado, 12 Assets PWA, 13 Smoke real de login. El detalle de cada
+cierre está en las secciones anteriores.
 
 ## Certificación del MVP (18/09/2026 — freeze de features)
 
@@ -364,6 +345,9 @@ punta. Registrado a partir del reporte de estado del 18/09 (etapa = certificaci�
       y recorrido E2E de postulaciones (Hito 3).
 - [ ] 🟠 **Casos de error Gmail reales** — desconectado, token expirado, token revocado, 401, 429,
       5xx, envío ambiguo, segundo envío (idempotencia), adjuntos en fallo (S3).
+      → **Avance 2026-11-04**: toda la matriz está cubierta por unit tests y se corrigieron 2 gaps
+      (retry transitorio exacto y limpieza del adjunto temporal). Falta el smoke con Gmail real
+      (token revocado/429) — ver "S3 — avance 2026-11-04" al pie.
 - [ ] 🟠 **Observabilidad activada** — setear `VITE_SENTRY_DSN` + `VITE_POSTHOG_KEY` y confirmar que
       llegan eventos de login/CV/extracción/postulación/copy/Gmail/límite (S4).
       → **Ver "S4 — Observabilidad (25/09)" más abajo: la instrumentación de cliente y server
@@ -620,9 +604,39 @@ Queda por confirmar con la prueba sobre `80e1e9c` (ver "▶ RETOMAR ACÁ").
 2. **S2 (smoke vertical completo)**: **CERRADO (2026-10-10) por uso real** — envio repetido de mails
    + generacion de postulaciones + copiar + CV en "Mis CV" + limite diario + conectar/desconectar
    Gmail.
-3. **S3 (casos de error Gmail reales)**: token expirado/revocado, 401, 429, 5xx, envio
-   ambiguo, idempotencia (2o envio), adjunto en fallo.
+3. **S3 (casos de error Gmail reales)**: matriz de unit tests cerrada y 2 fixes (retry transitorio
+   exacto + limpieza de adjunto temporal). Falta el smoke con Gmail real (token revocado/429).
+   Aplicar también `0016_application_actions.sql` y probar duplicar/pausar/reanudar/eliminar.
 4. **S5 (docs de cierre)**: README + BACKLOG + CHANGELOG al declarar el MVP cerrado.
 5. **Decidir Vercel** (solo decidir; si el dolor es el dominio largo → dominio custom en
    Cloudflare Workers sin migrar).
 6. Post-MVP: **multi-CV** con sugerencia segun la vacante.
+
+## [2026-11-04] S3 — Casos de error Gmail: matriz de tests cerrada
+
+- **Cobertura nueva**: Gmail desconectado, 401 + refresh (incluye segundo 401 tras refresh),
+  429 con retry, 5xx con retry agotado, ambiguo (sin respuesta / 200 ilegible), idempotencia
+  (2º envío), adjunto fallido y limpieza del temporal en éxito/fallo/lectura fallida.
+- **Fix 1 — retry transitorio**: el camino 429/5xx hacía 2 reintentos (3 intentos totales) por
+  cómo se combinaba el intento inicial con `sendWithTransientRetry(maxRetries=1)`. Ahora es
+  exactamente 1 reintento (`maxRetries=0` en el helper), igual que el camino de 401.
+- **Fix 2 — adjunto temporal**: el `finally` de limpieza ahora envuelve también la lectura y
+  validación del adjunto, no solo el envío. Si Storage falla o el archivo excede el límite, el
+  temporal de `resumes/{user}/tmp/` también se borra.
+- **Suite**: 128 tests ✅ / typecheck ✅ / lint 0 errores ✅ / build ✅.
+- **Pendiente**: verificación manual con Gmail real (revocar el acceso desde la cuenta de Google
+  y reintentar; forzar 429 real) — no automatizable sin credenciales.
+
+## [2026-11-04] Postulaciones — duplicar, pausar/reanudar y eliminar
+
+- **Duplicar**: copia `job_post_id`, `resume_id`, asunto, cuerpo y destinatario de una postulación
+  existente y crea una nueva en `pending` (no consume cuota ni envía nada).
+- **Pausar / reanudar**: nuevo estado `paused`, con filtro "En pausa" en el historial y bloqueo
+  server-side del envío mientras esté pausada.
+- **Eliminar**: borrado duro solo del dueño, con confirmación en detalle y en el historial; si el
+  aviso queda sin postulaciones se limpia también para no dejar huérfanos.
+- **Descartar**: disponible en pendientes y pausadas (se mantiene el motivo existente).
+- **UI**: menú "Acciones" en el detalle y menú ⋯ en cada tarjeta del historial.
+- **DB**: `supabase/migrations/0016_application_actions.sql` (check de `status` con `paused`,
+  policy/grant de DELETE). **Pendiente de aplicar en el SQL Editor del Cloud.**
+- **Verificación**: 129 tests ✅ / typecheck ✅ / lint 0 errores ✅ / build ✅.

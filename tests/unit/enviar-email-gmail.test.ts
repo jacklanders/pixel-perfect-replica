@@ -196,6 +196,79 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     expect(rpcNames).toContain("decrement_daily_usage");
   });
 
+  it("si Gmail está desconectado, falla sin marcar sent y revierte la cuota", async () => {
+    client.handlers["oauth_connections"] = () => errResult("sin fila");
+
+    await expect(enviarEmailGmailCore(coreArgs(client))).rejects.toThrow(
+      "No hay conexión Gmail activa",
+    );
+
+    const updateOp = client.calls.find((c) => c.op === "update" && c.table === "applications");
+    expect(updateOp).toBeUndefined();
+    expect(fetchStub).not.toHaveBeenCalled();
+    expect(rpcNames).toContain("increment_daily_usage");
+    expect(rpcNames).toContain("decrement_daily_usage");
+    expect(reportServerError).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ resultado: "rechazado", cuota_revertida: true }),
+    );
+  });
+
+  it("si Gmail da 429 y luego 200, reintenta y marca la postulación como enviada", async () => {
+    const accessEnc = await oauth.encrypt("access-valid");
+    client.handlers["oauth_connections"] = () =>
+      rowResult({
+        encrypted_access_token: accessEnc,
+        refresh_token: null,
+        expires_at: isoIn(60 * 60),
+      });
+    const statuses = [429, 200];
+    fetchStub.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.includes("gmail.googleapis.com")) {
+        const status = statuses.shift() ?? 200;
+        return fakeResponse(status, status === 200 ? { id: "gmail-429" } : "Too Many Requests");
+      }
+      throw new Error(`URL inesperada: ${url}`);
+    });
+
+    const result = await enviarEmailGmailCore(coreArgs(client));
+
+    expect(result.status).toBe("sent");
+    expect(result.messageId).toBe("gmail-429");
+    expect(rpcNames).not.toContain("decrement_daily_usage");
+  });
+
+  it("si Gmail persiste con 5xx, agota el retry, revierte la cuota y no marca sent", async () => {
+    const accessEnc = await oauth.encrypt("access-valid");
+    client.handlers["oauth_connections"] = () =>
+      rowResult({
+        encrypted_access_token: accessEnc,
+        refresh_token: null,
+        expires_at: isoIn(60 * 60),
+      });
+    fetchStub.mockImplementation(async (input: unknown) => {
+      const url = String(input);
+      if (url.includes("gmail.googleapis.com")) return fakeResponse(503, "Service Unavailable");
+      throw new Error(`URL inesperada: ${url}`);
+    });
+
+    await expect(enviarEmailGmailCore(coreArgs(client))).rejects.toMatchObject({
+      name: "GmailApiError",
+      status: 503,
+    });
+
+    const gmail = fetchStub.mock.calls.filter((c) => String(c[0]).includes("gmail.googleapis.com"));
+    expect(gmail).toHaveLength(2);
+    const updateOp = client.calls.find((c) => c.op === "update" && c.table === "applications");
+    expect(updateOp).toBeUndefined();
+    expect(rpcNames).toContain("decrement_daily_usage");
+    expect(reportServerError).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ resultado: "rechazado", cuota_revertida: true }),
+    );
+  });
+
   it("bloquea el envío cuando se alcanza el límite diario (RPC false) y no llama a Gmail", async () => {
     const accessEnc = await oauth.encrypt("access-valid");
     client.handlers["oauth_connections"] = () =>
@@ -277,6 +350,20 @@ describe("enviarEmailGmailCore (lógica completa del handler)", () => {
     );
 
     // No hubo update, no se reservó ni revirtió cuota, y Gmail no fue llamado.
+    const updateOp = client.calls.find((c) => c.op === "update" && c.table === "applications");
+    expect(updateOp).toBeUndefined();
+    expect(rpcNames).not.toContain("increment_daily_usage");
+    expect(rpcNames).not.toContain("decrement_daily_usage");
+    expect(fetchStub).not.toHaveBeenCalled();
+  });
+
+  it("bloquea el envío de una postulación en pausa sin gastar cuota ni llamar a Gmail", async () => {
+    client.handlers["applications"] = () => rowResult({ ...BASE_APP, status: "paused" });
+
+    await expect(enviarEmailGmailCore(coreArgs(client))).rejects.toThrow(
+      "Esa postulación está en pausa",
+    );
+
     const updateOp = client.calls.find((c) => c.op === "update" && c.table === "applications");
     expect(updateOp).toBeUndefined();
     expect(rpcNames).not.toContain("increment_daily_usage");

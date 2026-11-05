@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -11,6 +11,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -18,15 +28,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   AlertTriangle,
+  Ban,
   Check,
   Copy,
+  CopyPlus,
   FileText,
   Paperclip,
   Send,
   Sparkles,
   Lock,
   Loader2,
+  MoreHorizontal,
+  Pause,
+  Play,
   Save,
   Trash2,
   Mail,
@@ -37,6 +59,8 @@ import {
   getApplicationById,
   actualizarApplication,
   actualizarApplicationStatus,
+  duplicarApplication,
+  eliminarApplication,
   getUsoDiario,
   enviarEmailGmail,
 } from "@/lib/application.functions";
@@ -57,7 +81,7 @@ type ActualizarInput = {
 };
 type StatusInput = {
   id: string;
-  status: "pending" | "sent" | "discarded";
+  status: "pending" | "sent" | "discarded" | "paused";
   discard_reason?: string | null;
 };
 
@@ -120,7 +144,7 @@ type AppDetail = {
   user_id: string;
   resume_id: string | null;
   job_post_id: string;
-  status: "pending" | "sent" | "discarded";
+  status: "pending" | "sent" | "discarded" | "paused";
   discard_reason: string | null;
   generated_subject: string;
   required_subject: string | null;
@@ -152,12 +176,14 @@ const estadoStyles: Record<string, string> = {
   sent: "bg-primary text-primary-foreground",
   pending: "bg-accent text-accent-foreground",
   discarded: "bg-muted text-muted-foreground",
+  paused: "bg-muted text-muted-foreground",
 };
 
 const estadoLabel: Record<string, string> = {
   sent: "Enviada",
   pending: "Pendiente",
   discarded: "Descartada",
+  paused: "En pausa",
 };
 
 function estaVencido(closingAt: string | null): boolean {
@@ -275,6 +301,7 @@ function DetallePostulacion() {
   const { id } = Route.useParams();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const search = useSearch({ from: "/_authenticated/postulaciones/$id" });
 
   const fetchUso = useServerFn(getUsoDiario);
@@ -320,6 +347,7 @@ function DetallePostulacion() {
   const [firma, setFirma] = useState("");
   const [includeCopy, setIncludeCopy] = useState(false);
   const [showReconnectDialog, setShowReconnectDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [gmailError, setGmailError] = useState<string | null>(null);
   const [adjuntoModo, setAdjuntoModo] = useState<"jack" | "archivo">("jack");
   const [archivoAdjunto, setArchivoAdjunto] = useState<{
@@ -465,6 +493,11 @@ function DetallePostulacion() {
     },
   });
 
+  const invalidarPostulacion = () => {
+    void queryClient.invalidateQueries({ queryKey: ["application", id] });
+    void queryClient.invalidateQueries({ queryKey: ["applications"] });
+  };
+
   const descartar = useMutation({
     mutationFn: () =>
       cambiarStatus({
@@ -472,8 +505,56 @@ function DetallePostulacion() {
         status: "discarded",
         discard_reason: "Descartada por el usuario.",
       }),
-    onSuccess: () => toast.success("Postulación descartada"),
+    onSuccess: () => {
+      toast.success("Postulación descartada");
+      invalidarPostulacion();
+    },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Error al descartar"),
+  });
+
+  const pausar = useMutation({
+    mutationFn: () => cambiarStatus({ id, status: "paused" }),
+    onSuccess: () => {
+      toast.success("Postulación en pausa");
+      invalidarPostulacion();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Error al pausar"),
+  });
+
+  const reanudar = useMutation({
+    mutationFn: () => cambiarStatus({ id, status: "pending" }),
+    onSuccess: () => {
+      toast.success("Postulación reanudada");
+      invalidarPostulacion();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Error al reanudar"),
+  });
+
+  const duplicar = useMutation({
+    mutationFn: () =>
+      duplicarApplication({
+        data: { id },
+      } as unknown as Parameters<typeof duplicarApplication>[0]),
+    onSuccess: (copia) => {
+      const copiaId = (copia as { id: string }).id;
+      toast.success("Postulación duplicada");
+      void queryClient.invalidateQueries({ queryKey: ["applications"] });
+      void navigate({ to: "/postulaciones/$id", params: { id: copiaId } });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Error al duplicar"),
+  });
+
+  const eliminar = useMutation({
+    mutationFn: () =>
+      eliminarApplication({
+        data: { id },
+      } as unknown as Parameters<typeof eliminarApplication>[0]),
+    onSuccess: () => {
+      toast.success("Postulación eliminada");
+      void queryClient.invalidateQueries({ queryKey: ["applications"] });
+      void navigate({ to: "/postulaciones" });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Error al eliminar"),
   });
 
   const desconectar = useMutation({
@@ -635,9 +716,48 @@ function DetallePostulacion() {
             Vigente hasta el {formatearFecha(job.closing_at)}
           </span>
         ) : null}
-        <Button variant="ghost" size="sm" asChild className="ml-auto">
-          <Link to="/postulaciones">Volver al historial</Link>
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <MoreHorizontal className="size-4" /> Acciones
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => duplicar.mutate()} disabled={duplicar.isPending}>
+                <CopyPlus className="size-4" /> Duplicar
+              </DropdownMenuItem>
+              {app.status === "pending" || app.status === "paused" ? (
+                <DropdownMenuItem
+                  onSelect={() => (app.status === "paused" ? reanudar.mutate() : pausar.mutate())}
+                  disabled={pausar.isPending || reanudar.isPending}
+                >
+                  {app.status === "paused" ? (
+                    <Play className="size-4" />
+                  ) : (
+                    <Pause className="size-4" />
+                  )}
+                  {app.status === "paused" ? "Reanudar" : "Poner en pausa"}
+                </DropdownMenuItem>
+              ) : null}
+              {app.status === "pending" || app.status === "paused" ? (
+                <DropdownMenuItem onSelect={() => descartar.mutate()}>
+                  <Ban className="size-4" /> Descartar
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="size-4" /> Eliminar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/postulaciones">Volver al historial</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
@@ -895,6 +1015,25 @@ function DetallePostulacion() {
               <p className="font-medium">Postulación descartada</p>
               {app.discard_reason ? <p className="mt-1">{app.discard_reason}</p> : null}
             </div>
+          ) : app.status === "paused" ? (
+            <div className="space-y-3 rounded-xl border border-border bg-muted p-4 text-sm">
+              <p className="font-medium">Postulación en pausa</p>
+              <p className="text-muted-foreground">
+                No se enviará hasta que la reanudes. Podés duplicarla si querés probar otra versión.
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => reanudar.mutate()}
+                disabled={reanudar.isPending}
+              >
+                {reanudar.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Play className="size-4" />
+                )}
+                Reanudar
+              </Button>
+            </div>
           ) : (
             <div className="space-y-4">
               {/* Checkbox enviarme copia */}
@@ -941,8 +1080,12 @@ function DetallePostulacion() {
                   </Button>
                 )}
 
+                <Button variant="ghost" onClick={() => pausar.mutate()} disabled={isSending}>
+                  <Pause className="size-4" /> Pausar
+                </Button>
+
                 <Button variant="ghost" onClick={() => descartar.mutate()} disabled={isSending}>
-                  <Trash2 className="size-4" /> Descartar
+                  <Ban className="size-4" /> Descartar
                 </Button>
               </div>
 
@@ -1023,6 +1166,34 @@ function DetallePostulacion() {
           </div>
         </section>
       </div>
+
+      {/* ─── Dialog: Eliminar postulación ─── */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar esta postulación?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se borra del historial y no se puede recuperar. Si solo querés archivarla, usá
+              “Descartar” en lugar de eliminar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={eliminar.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => eliminar.mutate()}
+              disabled={eliminar.isPending}
+            >
+              {eliminar.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ─── Dialog: Reconectar Gmail ─── */}
       <Dialog open={showReconnectDialog} onOpenChange={setShowReconnectDialog}>

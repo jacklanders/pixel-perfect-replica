@@ -61,6 +61,9 @@ export async function enviarEmailGmailCore(argv: {
     trackServerEvent(SERVER_EVENT.gmailEnvioDuplicado, { etapa: STAGE.envioGmail });
     throw new Error("Esa postulación ya fue enviada");
   }
+  if (app.status === "paused") {
+    throw new Error("Esa postulación está en pausa. Reanudala antes de enviarla.");
+  }
 
   // 2. Verificar límite diario (resuelto server-side: override > rol > fallback)
   const { limite } = await obtenerLimiteDiarioEfectivo({ supabase, userId });

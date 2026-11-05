@@ -1,13 +1,50 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Briefcase, Plus, Search, Clock, AlertTriangle, Loader2 } from "lucide-react";
-import { listarApplications, getUsoDiario } from "@/lib/application.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Ban,
+  Briefcase,
+  CopyPlus,
+  MoreHorizontal,
+  Pause,
+  Play,
+  Plus,
+  Search,
+  Clock,
+  AlertTriangle,
+  Loader2,
+  Trash2,
+} from "lucide-react";
+import {
+  listarApplications,
+  getUsoDiario,
+  actualizarApplicationStatus,
+  duplicarApplication,
+  eliminarApplication,
+} from "@/lib/application.functions";
 
 /* ─── Tipos ─── */
 type ApplicationWithJobPost = {
@@ -15,7 +52,7 @@ type ApplicationWithJobPost = {
   user_id: string;
   resume_id: string;
   job_post_id: string;
-  status: "pending" | "sent" | "discarded";
+  status: "pending" | "sent" | "discarded" | "paused";
   discard_reason: string | null;
   generated_subject: string | null;
   required_subject: string | null;
@@ -36,6 +73,30 @@ type ApplicationWithJobPost = {
     created_at: string;
   } | null;
 };
+
+type StatusInput = {
+  id: string;
+  status: "pending" | "sent" | "discarded" | "paused";
+  discard_reason?: string | null;
+};
+
+async function cambiarStatus(payload: StatusInput) {
+  return actualizarApplicationStatus({
+    data: payload,
+  } as unknown as Parameters<typeof actualizarApplicationStatus>[0]);
+}
+
+async function duplicarApp(id: string) {
+  return duplicarApplication({
+    data: { id },
+  } as unknown as Parameters<typeof duplicarApplication>[0]);
+}
+
+async function eliminarApp(id: string) {
+  return eliminarApplication({
+    data: { id },
+  } as unknown as Parameters<typeof eliminarApplication>[0]);
+}
 
 /* ─── Helpers ─── */
 function tiempoRelativo(fecha: string): string {
@@ -72,18 +133,21 @@ const estadoStyles: Record<string, string> = {
   sent: "bg-primary text-primary-foreground",
   pending: "bg-accent text-accent-foreground",
   discarded: "bg-muted text-muted-foreground",
+  paused: "bg-muted text-muted-foreground",
 };
 
 const estadoLabel: Record<string, string> = {
   sent: "Enviada",
   pending: "Pendiente",
   discarded: "Descartada",
+  paused: "En pausa",
 };
 
 const filtros = [
   { key: "todas", label: "Todas", dbStatus: null as string | null },
   { key: "pendiente", label: "Pendientes", dbStatus: "pending" },
   { key: "enviada", label: "Enviadas", dbStatus: "sent" },
+  { key: "pausada", label: "En pausa", dbStatus: "paused" },
   { key: "descartada", label: "Descartadas", dbStatus: "discarded" },
 ] as const;
 
@@ -112,6 +176,9 @@ export const Route = createFileRoute("/_authenticated/postulaciones/")({
 function PostulacionesPage() {
   const [filtro, setFiltro] = useState<(typeof filtros)[number]["key"]>("todas");
   const [q, setQ] = useState("");
+  const [appAEliminar, setAppAEliminar] = useState<ApplicationWithJobPost | null>(null);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const fetchApps = useServerFn(listarApplications);
   const fetchUso = useServerFn(getUsoDiario);
@@ -128,6 +195,47 @@ function PostulacionesPage() {
   const { data: uso, isPending: usoPending } = useQuery({
     queryKey: ["uso-diario"],
     queryFn: () => fetchUso(),
+  });
+
+  const invalidarLista = () => {
+    void queryClient.invalidateQueries({ queryKey: ["applications"] });
+  };
+
+  const cambiarEstado = useMutation({
+    mutationFn: (payload: StatusInput) => cambiarStatus(payload),
+    onSuccess: (_row, payload) => {
+      const mensaje =
+        payload.status === "paused"
+          ? "Postulación en pausa"
+          : payload.status === "pending"
+            ? "Postulación reanudada"
+            : "Postulación descartada";
+      toast.success(mensaje);
+      invalidarLista();
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "No se pudo cambiar el estado"),
+  });
+
+  const duplicar = useMutation({
+    mutationFn: (id: string) => duplicarApp(id),
+    onSuccess: (copia) => {
+      const copiaId = (copia as { id: string }).id;
+      toast.success("Postulación duplicada");
+      invalidarLista();
+      void navigate({ to: "/postulaciones/$id", params: { id: copiaId } });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo duplicar"),
+  });
+
+  const eliminar = useMutation({
+    mutationFn: (id: string) => eliminarApp(id),
+    onSuccess: () => {
+      toast.success("Postulación eliminada");
+      setAppAEliminar(null);
+      invalidarLista();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo eliminar"),
   });
 
   const lista = (apps ?? []).filter((app) => {
@@ -245,11 +353,71 @@ function PostulacionesPage() {
                     {app.discard_reason ? ` · ${app.discard_reason}` : ""}
                   </p>
                 </div>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/postulaciones/$id" params={{ id: app.id }}>
-                    Ver postulación
-                  </Link>
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/postulaciones/$id" params={{ id: app.id }}>
+                      Ver postulación
+                    </Link>
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Acciones para ${app.job_posts?.role ?? "la postulación"}`}
+                      >
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onSelect={() => duplicar.mutate(app.id)}
+                        disabled={duplicar.isPending}
+                      >
+                        <CopyPlus className="size-4" /> Duplicar
+                      </DropdownMenuItem>
+                      {app.status === "pending" || app.status === "paused" ? (
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            cambiarEstado.mutate({
+                              id: app.id,
+                              status: app.status === "paused" ? "pending" : "paused",
+                            })
+                          }
+                          disabled={cambiarEstado.isPending}
+                        >
+                          {app.status === "paused" ? (
+                            <Play className="size-4" />
+                          ) : (
+                            <Pause className="size-4" />
+                          )}
+                          {app.status === "paused" ? "Reanudar" : "Poner en pausa"}
+                        </DropdownMenuItem>
+                      ) : null}
+                      {app.status === "pending" || app.status === "paused" ? (
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            cambiarEstado.mutate({
+                              id: app.id,
+                              status: "discarded",
+                              discard_reason: "Descartada por el usuario.",
+                            })
+                          }
+                          disabled={cambiarEstado.isPending}
+                        >
+                          <Ban className="size-4" /> Descartar
+                        </DropdownMenuItem>
+                      ) : null}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onSelect={() => setAppAEliminar(app)}
+                      >
+                        <Trash2 className="size-4" /> Eliminar
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </article>
             );
           })}
@@ -262,6 +430,41 @@ function PostulacionesPage() {
           ) : null}
         </div>
       )}
+
+      <AlertDialog
+        open={appAEliminar !== null}
+        onOpenChange={(open) => {
+          if (!open) setAppAEliminar(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar esta postulación?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se borra del historial y no se puede recuperar
+              {appAEliminar?.job_posts?.role ? ` (“${appAEliminar.job_posts.role}”)` : ""}. Si solo
+              querés archivarla, usá “Descartar” en lugar de eliminar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={eliminar.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (appAEliminar) eliminar.mutate(appAEliminar.id);
+              }}
+              disabled={eliminar.isPending}
+            >
+              {eliminar.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }

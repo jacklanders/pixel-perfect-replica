@@ -63,7 +63,7 @@ export const getApplicationById = createServerFn({ method: "GET" })
 
 const actualizarStatusSchema = z.object({
   id: z.string(),
-  status: z.enum(["pending", "sent", "discarded"]),
+  status: z.enum(["pending", "sent", "discarded", "paused"]),
   discard_reason: z.string().nullable().optional(),
 });
 
@@ -88,6 +88,88 @@ export const actualizarApplicationStatus = createServerFn({ method: "POST" })
 
     if (error) throw new Error(error.message);
     return row;
+  });
+
+export const duplicarApplication = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: original, error: errorLectura } = await context.supabase
+      .from("applications")
+      .select("*")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+
+    if (errorLectura) throw new Error(errorLectura.message);
+    if (!original) {
+      throw new Error("Esa postulación no existe o no pertenece a tu cuenta.");
+    }
+
+    const { data: copia, error } = await context.supabase
+      .from("applications")
+      .insert({
+        user_id: context.userId,
+        job_post_id: original.job_post_id,
+        resume_id: original.resume_id,
+        generated_subject: original.generated_subject,
+        required_subject: original.required_subject,
+        generated_body: original.generated_body,
+        destination_email: original.destination_email,
+        status: "pending",
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+    return copia;
+  });
+
+export const eliminarApplication = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: original, error: errorLectura } = await context.supabase
+      .from("applications")
+      .select("id, job_post_id")
+      .eq("id", data.id)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+
+    if (errorLectura) throw new Error(errorLectura.message);
+    if (!original) {
+      throw new Error("Esa postulación no existe o no pertenece a tu cuenta.");
+    }
+
+    const { error } = await context.supabase
+      .from("applications")
+      .delete()
+      .eq("id", data.id)
+      .eq("user_id", context.userId);
+
+    if (error) throw new Error(error.message);
+
+    // Si el aviso quedó sin postulaciones, se limpia para no dejar huérfanos.
+    const { data: restantes, error: errorRestantes } = await context.supabase
+      .from("applications")
+      .select("id")
+      .eq("job_post_id", original.job_post_id)
+      .eq("user_id", context.userId);
+
+    if (!errorRestantes && (restantes ?? []).length === 0) {
+      const { error: errorJobPost } = await context.supabase
+        .from("job_posts")
+        .delete()
+        .eq("id", original.job_post_id)
+        .eq("user_id", context.userId);
+
+      if (errorJobPost) {
+        // El borrado de la postulación ya se hizo: no se falla por la limpieza.
+        console.warn("[applications] No se pudo limpiar el aviso huérfano", errorJobPost.message);
+      }
+    }
+
+    return { ok: true };
   });
 
 const actualizarApplicationSchema = z.object({

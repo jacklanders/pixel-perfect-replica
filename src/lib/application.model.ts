@@ -1,4 +1,4 @@
-export type ApplicationStatus = "pending" | "sent" | "discarded";
+export type ApplicationStatus = "pending" | "sent" | "discarded" | "paused";
 
 export type Application = {
   id: string;
